@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -26,6 +26,10 @@ SHELL ["/bin/bash", "-l", "-c"]
 
 # Claude Code
 RUN curl -fsSL https://claude.ai/install.sh | bash
+
+# Symlink node/npm/npx/yarn to /usr/local/bin so they're available in all shells
+RUN node_bin=$(dirname $(ls /root/.nvm/versions/node/*/bin/node | head -1)) && \
+    for bin in node npm npx yarn; do ln -sf $node_bin/$bin /usr/local/bin/$bin 2>/dev/null || true; done
 
 # Git config
 COPY gitconfig /root/.gitconfig
