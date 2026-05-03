@@ -2,12 +2,12 @@ services:
   claude-sandbox:
     build: .
     container_name: claude-sandbox
-    working_dir: /workspace/${PROJECT_NAME}
+    working_dir: /workspace/${PROJECT_NAME:-placeholder}
     command: sleep infinity
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ${PROJECT_PATH}:/workspace/${PROJECT_NAME}
+      - ${PROJECT_PATH:-/tmp}:/workspace/${PROJECT_NAME:-placeholder}
       - ${HOME}/.claude:/root/.claude
       - cargo-registry:/root/.cargo/registry
       - cargo-git:/root/.cargo/git
