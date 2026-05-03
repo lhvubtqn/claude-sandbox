@@ -18,12 +18,20 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
+# Create non-root user (claude --dangerously-skip-permissions requires non-root)
+RUN useradd -m -s /bin/bash -u 1000 claude && \
+    echo "claude ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+RUN mkdir -p /workspace && chown claude:claude /workspace
+
+USER claude
+ENV HOME=/home/claude
+
 # Rust, Solana CLI, Anchor, Node.js, Yarn — official all-in-one install
 RUN curl --proto '=https' --tlsv1.2 -sSfL https://solana-install.solana.workers.dev | bash
 
 # Bake all tool paths into every process (login shell not required)
-ENV NVM_DIR=/root/.nvm
-ENV PATH="/root/.cargo/bin:/root/.local/share/solana/install/active_release/bin:/root/.avm/bin:/root/.local/bin:${PATH}"
+ENV NVM_DIR=/home/claude/.nvm
+ENV PATH="/home/claude/.cargo/bin:/home/claude/.local/share/solana/install/active_release/bin:/home/claude/.avm/bin:/home/claude/.local/bin:${PATH}"
 
 # Set NVM default version and symlink to /usr/local/bin so they're available in all shells
 RUN bash -c "source $NVM_DIR/nvm.sh && \
@@ -37,6 +45,6 @@ RUN bash -c "source $NVM_DIR/nvm.sh && \
 RUN curl -fsSL https://claude.ai/install.sh | bash
 
 # Git config
-COPY gitconfig /root/.gitconfig
+COPY --chown=claude:claude gitconfig /home/claude/.gitconfig
 
 WORKDIR /workspace

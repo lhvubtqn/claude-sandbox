@@ -8,13 +8,13 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ${PROJECT_PATH:-/tmp}:/workspace/${PROJECT_NAME:-placeholder}
-      - ${HOME}/.claude:/root/.claude
-      - cargo-registry:/root/.cargo/registry
-      - cargo-git:/root/.cargo/git
-      - rustup-downloads:/root/.rustup/downloads
-      - npm-cache:/root/.npm
-      - solana-config:/root/.config/solana
-      - vscode-server:/root/.vscode-server
+      - ${HOME}/.claude:/home/claude/.claude
+      - cargo-registry:/home/claude/.cargo/registry
+      - cargo-git:/home/claude/.cargo/git
+      - rustup-downloads:/home/claude/.rustup/downloads
+      - npm-cache:/home/claude/.npm
+      - solana-config:/home/claude/.config/solana
+      - vscode-server:/home/claude/.vscode-server
 
 volumes:
   cargo-registry:
