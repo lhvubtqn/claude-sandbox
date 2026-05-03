@@ -21,12 +21,17 @@ RUN apt-get update && apt-get install -y \
 # Rust, Solana CLI, Anchor, Node.js, Yarn — official all-in-one install
 RUN curl --proto '=https' --tlsv1.2 -sSfL https://solana-install.solana.workers.dev | bash
 
-# Symlink node/npm/npx/yarn to /usr/local/bin so they're available in all shells
-RUN node_bin=$(dirname $(ls /root/.nvm/versions/node/*/bin/node | head -1)) && \
-    for bin in node npm npx yarn; do ln -sf $node_bin/$bin /usr/local/bin/$bin 2>/dev/null || true; done
-
 # Bake all tool paths into every process (login shell not required)
+ENV NVM_DIR=/root/.nvm
 ENV PATH="/root/.cargo/bin:/root/.local/share/solana/install/active_release/bin:/root/.avm/bin:/root/.local/bin:${PATH}"
+
+# Set NVM default version and symlink to /usr/local/bin so they're available in all shells
+RUN bash -c "source $NVM_DIR/nvm.sh && \
+    nvm alias default node && \
+    node_bin=\$(dirname \$(nvm which default)) && \
+    for bin in node npm npx yarn; do \
+        ln -sf \$node_bin/\$bin /usr/local/bin/\$bin 2>/dev/null || true; \
+    done"
 
 # Claude Code
 RUN curl -fsSL https://claude.ai/install.sh | bash
