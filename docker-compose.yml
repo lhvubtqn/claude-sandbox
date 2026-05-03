@@ -1,0 +1,23 @@
+services:
+  claude-sandbox:
+    build: .
+    container_name: claude-sandbox
+    working_dir: /workspace/${PROJECT_NAME}
+    command: sleep infinity
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ${PROJECT_PATH}:/workspace/${PROJECT_NAME}
+      - ${HOME}/.claude:/root/.claude
+      - cargo-registry:/root/.cargo/registry
+      - cargo-git:/root/.cargo/git
+      - rustup-downloads:/root/.rustup/downloads
+      - npm-cache:/root/.npm
+      - solana-config:/root/.config/solana
+
+volumes:
+  cargo-registry:
+  cargo-git:
+  rustup-downloads:
+  npm-cache:
+  solana-config:
