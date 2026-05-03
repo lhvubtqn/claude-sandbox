@@ -2,39 +2,30 @@ FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# System deps
+# System deps (from official Solana docs for Ubuntu/Debian)
 RUN apt-get update && apt-get install -y \
     build-essential \
+    pkg-config \
+    libudev-dev \
+    llvm \
+    libclang-dev \
+    protobuf-compiler \
+    libssl-dev \
     curl \
     git \
-    pkg-config \
-    libssl-dev \
-    libudev-dev \
+    ca-certificates \
     python3 \
     python3-pip \
-    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Node.js 22 LTS
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
-    && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/*
+# Rust, Solana CLI, Anchor, Node.js, Yarn — official all-in-one install
+RUN curl --proto '=https' --tlsv1.2 -sSfL https://solana-install.solana.workers.dev | bash
 
-# Rust (stable)
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
-ENV PATH="/root/.cargo/bin:${PATH}"
-
-# Solana CLI (stable)
-RUN sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
-ENV PATH="/root/.local/share/solana/install/active_release/bin:${PATH}"
-
-# AVM + Anchor (latest stable at build time)
-RUN cargo install avm \
-    && avm install latest \
-    && avm use latest
+# Use login shell so subsequent RUN steps pick up PATH from ~/.bashrc
+SHELL ["/bin/bash", "-l"]
 
 # Claude Code
-RUN npm install -g @anthropic-ai/claude-code
+RUN curl -fsSL https://claude.ai/install.sh | bash
 
 # Git config
 COPY gitconfig /root/.gitconfig
