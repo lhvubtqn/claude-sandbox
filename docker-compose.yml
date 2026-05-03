@@ -14,6 +14,7 @@ services:
       - rustup-downloads:/root/.rustup/downloads
       - npm-cache:/root/.npm
       - solana-config:/root/.config/solana
+      - vscode-server:/root/.vscode-server
 
 volumes:
   cargo-registry:
@@ -21,3 +22,4 @@ volumes:
   rustup-downloads:
   npm-cache:
   solana-config:
+  vscode-server:
