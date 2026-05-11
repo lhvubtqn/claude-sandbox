@@ -6,6 +6,8 @@ services:
     hostname: claude-sandbox
     working_dir: /workspace/${PROJECT_NAME:-placeholder}
     command: sleep infinity
+    security_opt:
+      - seccomp=unconfined
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
