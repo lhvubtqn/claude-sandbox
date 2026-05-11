@@ -41,13 +41,15 @@ cp ~/.claude-sandbox/functions/claude-sandbox.fish ~/.config/fish/functions/
 PROJECT_PATH=/tmp PROJECT_NAME=build docker compose -f ~/.claude-sandbox/docker-compose.yml build
 ```
 
-**4. Log in to Claude** on your host machine (if not already logged in)
+**4. Log in to Claude** inside the container (one-time setup)
 
 ```bash
+claude-sandbox  # from any project folder
+# then in the VS Code terminal:
 claude
 ```
 
-Your subscription session is shared into the container via the `~/.claude` bind mount — no re-login needed.
+Claude config and session are stored in the `claude-config` named volume — login persists across restarts.
 
 ## Usage
 
@@ -86,7 +88,8 @@ claude --dangerously-skip-permissions
 | `npm-cache` | `/root/.npm` | npm cache |
 | `solana-config` | `/root/.config/solana` | Solana keypairs and config |
 | `vscode-server` | `/home/claude/.vscode-server` | VS Code Server (survives restarts) |
-| `~/.claude` (bind) | `/root/.claude` | Claude Code auth and config |
+| `claude-config` | `/home/claude/.claude` | Claude Code auth, config, and session |
+| `~/.claude.json` (bind) | `/home/claude/.claude.json` | Claude Code account state and onboarding flags |
 | `$PROJECT_PATH` (bind) | `/workspace/$PROJECT_NAME` | Your project files |
 
 ## Rebuilding

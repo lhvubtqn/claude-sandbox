@@ -1,14 +1,17 @@
 services:
   claude-sandbox:
     build: .
+    image: claude-sandbox
     container_name: claude-sandbox
+    hostname: claude-sandbox
     working_dir: /workspace/${PROJECT_NAME:-placeholder}
     command: sleep infinity
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - ${PROJECT_PATH:-/tmp}:/workspace/${PROJECT_NAME:-placeholder}
-      - ${HOME}/.claude:/home/claude/.claude
+      - claude-config:/home/claude/.claude
+      - ${HOME}/.claude.json:/home/claude/.claude.json
       - cargo-registry:/home/claude/.cargo/registry
       - cargo-git:/home/claude/.cargo/git
       - rustup-downloads:/home/claude/.rustup/downloads
@@ -17,6 +20,7 @@ services:
       - vscode-server:/home/claude/.vscode-server
 
 volumes:
+  claude-config:
   cargo-registry:
   cargo-git:
   rustup-downloads:
