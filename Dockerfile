@@ -16,30 +16,35 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     python3 \
     python3-pip \
+    sudo \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user (claude --dangerously-skip-permissions requires non-root)
-RUN useradd -m -s /bin/bash -u 1000 claude && \
+# Ubuntu 24.04 ships with a user 'ubuntu' at UID 1000; rename it to 'claude'
+RUN usermod -l claude -d /home/claude -m ubuntu && \
+    groupmod -n claude ubuntu && \
     echo "claude ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 RUN mkdir -p /workspace && chown claude:claude /workspace
 
 USER claude
 ENV HOME=/home/claude
 
+# Pre-create dirs that are backed by named volumes — Docker initializes a named
+# volume from the image only if the volume is empty, so ownership must be set here.
+RUN mkdir -p /home/claude/.vscode-server
+
 # Rust, Solana CLI, Anchor, Node.js, Yarn — official all-in-one install
 RUN curl --proto '=https' --tlsv1.2 -sSfL https://solana-install.solana.workers.dev | bash
 
 # Bake all tool paths into every process (login shell not required)
 ENV NVM_DIR=/home/claude/.nvm
-ENV PATH="/home/claude/.cargo/bin:/home/claude/.local/share/solana/install/active_release/bin:/home/claude/.avm/bin:/home/claude/.local/bin:${PATH}"
+ENV PATH="/home/claude/.cargo/bin:/home/claude/.local/share/solana/install/active_release/bin:/home/claude/.avm/bin:/home/claude/.local/bin:/home/claude/.nvm/default-node-bin:${PATH}"
 
-# Set NVM default version and symlink to /usr/local/bin so they're available in all shells
+# Create a stable /home/claude/.nvm/default-node-bin symlink that points to
+# whichever node version NVM just installed as default. No root needed.
 RUN bash -c "source $NVM_DIR/nvm.sh && \
     nvm alias default node && \
-    node_bin=\$(dirname \$(nvm which default)) && \
-    for bin in node npm npx yarn; do \
-        ln -sf \$node_bin/\$bin /usr/local/bin/\$bin 2>/dev/null || true; \
-    done"
+    ln -sf \$(dirname \$(nvm which default)) $NVM_DIR/default-node-bin"
 
 # Claude Code
 RUN curl -fsSL https://claude.ai/install.sh | bash

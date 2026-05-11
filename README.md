@@ -85,7 +85,7 @@ claude --dangerously-skip-permissions
 | `rustup-downloads` | `/root/.rustup/downloads` | Rustup toolchain downloads |
 | `npm-cache` | `/root/.npm` | npm cache |
 | `solana-config` | `/root/.config/solana` | Solana keypairs and config |
-| `vscode-server` | `/root/.vscode-server` | VS Code Server (survives restarts) |
+| `vscode-server` | `/home/claude/.vscode-server` | VS Code Server (survives restarts) |
 | `~/.claude` (bind) | `/root/.claude` | Claude Code auth and config |
 | `$PROJECT_PATH` (bind) | `/workspace/$PROJECT_NAME` | Your project files |
 
