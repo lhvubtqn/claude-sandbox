@@ -90,6 +90,7 @@ claude --dangerously-skip-permissions
 | `vscode-server` | `/home/claude/.vscode-server` | VS Code Server (survives restarts) |
 | `claude-config` | `/home/claude/.claude` | Claude Code auth, config, and session |
 | `~/.claude.json` (bind) | `/home/claude/.claude.json` | Claude Code account state and onboarding flags |
+| `~/.gitconfig` (bind, ro) | `/home/claude/.gitconfig` | Git identity (name, email, aliases) |
 | `$PROJECT_PATH` (bind) | `/workspace/$PROJECT_NAME` | Your project files |
 
 ## Rebuilding

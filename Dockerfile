@@ -49,7 +49,4 @@ RUN bash -c "source $NVM_DIR/nvm.sh && \
 # Claude Code
 RUN curl -fsSL https://claude.ai/install.sh | bash
 
-# Git config
-COPY --chown=claude:claude gitconfig /home/claude/.gitconfig
-
 WORKDIR /workspace
