@@ -49,4 +49,8 @@ RUN bash -c "source $NVM_DIR/nvm.sh && \
 # Claude Code
 RUN curl -fsSL https://claude.ai/install.sh | bash
 
+COPY --chown=claude:claude entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
+
 WORKDIR /workspace
