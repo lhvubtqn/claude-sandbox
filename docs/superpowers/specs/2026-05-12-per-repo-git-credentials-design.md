@@ -29,7 +29,15 @@ The file stores only key paths, never key content.
 3. Look up entry for `PROJECT_PATH`:
    - **Entry exists, `type: ssh`**: load `keyPath`, verify file exists, set `SANDBOX_SSH_KEY_PATH`
    - **Entry exists, `type: none`**: proceed without credentials
-   - **No entry**: print hint `"Tip: to create a repo-specific key: ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_<name> -C \"<name> deploy key\" -N \"\""`, then prompt `"No credentials configured. Enter SSH key path (or Enter to skip):"`, save result (`ssh` or `none`)
+   - **No entry**: print multi-line hint before prompting:
+     ```
+     Tip: to set up a repo-specific SSH deploy key:
+       1. ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_<name> -C "<name> deploy key" -N ""
+       2. cat ~/.ssh/id_ed25519_<name>.pub   ← paste this as a deploy key in repo settings
+          GitHub : repo Settings → Deploy keys → Add deploy key
+          GitLab : repo Settings → Repository → Deploy keys
+     ```
+     Then prompt `"No credentials configured. Enter SSH key path (or Enter to skip):"`, save result (`ssh` or `none`)
 4. Call `docker compose up -d --force-recreate` with `SANDBOX_SSH_KEY_PATH` in env
 5. Open VS Code attached to container
 
