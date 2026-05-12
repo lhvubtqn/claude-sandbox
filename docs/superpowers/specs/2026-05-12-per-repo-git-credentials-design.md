@@ -79,6 +79,10 @@ exec "$@"
 
 The `command: sleep infinity` in `docker-compose.yml` becomes the CMD passed to the entrypoint.
 
+## Dependencies
+
+- `jq` must be installed on the host (used by the fish function to read/write `project-creds.json`)
+
 ## Setup (One-Time)
 
 ```bash
