@@ -14,7 +14,8 @@ services:
       - ${PROJECT_PATH:-/tmp}:/workspace/${PROJECT_NAME:-placeholder}
       - claude-config:/home/claude/.claude
       - ${HOME}/.claude.json:/home/claude/.claude.json
-      - ${HOME}/.gitconfig:/home/claude/.gitconfig:ro
+      - .gitconfig:/home/claude/.gitconfig:ro
+      - ${SANDBOX_SSH_KEY_PATH:-.ssh_placeholder}:/home/claude/.ssh/repo_key:ro
       - cargo-registry:/home/claude/.cargo/registry
       - cargo-git:/home/claude/.cargo/git
       - rustup-downloads:/home/claude/.rustup/downloads
