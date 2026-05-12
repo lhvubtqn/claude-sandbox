@@ -29,17 +29,50 @@ The file stores only key paths, never key content.
 3. Look up entry for `PROJECT_PATH`:
    - **Entry exists, `type: ssh`**: load `keyPath`, verify file exists, set `SANDBOX_SSH_KEY_PATH`
    - **Entry exists, `type: none`**: proceed without credentials
-   - **No entry**: print multi-line hint before prompting:
-     ```
-     Tip: to set up a repo-specific SSH deploy key:
-       1. ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_<name> -C "<name> deploy key" -N ""
-       2. cat ~/.ssh/id_ed25519_<name>.pub   ← paste this as a deploy key in repo settings
-          GitHub : repo Settings → Deploy keys → Add deploy key
-          GitLab : repo Settings → Repository → Deploy keys
-     ```
-     Then prompt `"No credentials configured. Enter SSH key path (or Enter to skip):"`, save result (`ssh` or `none`)
+   - **No entry**: launch interactive credential setup wizard (see Credential Setup Wizard below)
 4. Call `docker compose up -d --force-recreate` with `SANDBOX_SSH_KEY_PATH` in env
 5. Open VS Code attached to container
+
+### Credential Setup Wizard
+
+Triggered on first launch for a project (no config entry) or via `creds set`. Presents:
+
+```
+No SSH credentials configured for "/path/to/project".
+
+  1. Generate a new deploy key
+  2. Use an existing key
+  3. Skip (no git credentials)
+
+Choice: _
+```
+
+**Option 1 — Generate:**
+1. Prompt for key path with suggested default: `~/.ssh/id_ed25519_<project-name>`
+   ```
+   Key path [~/.ssh/id_ed25519_<name>]: _
+   ```
+2. Run `ssh-keygen -t ed25519 -f <path> -C "<name> deploy key" -N ""` automatically
+3. Copy public key to clipboard (via `clip.exe` on WSL2), print key path to console, then show platform instructions and wait:
+   ```
+   Key generated at ~/.ssh/id_ed25519_<name>
+   Public key copied to clipboard.
+
+   GitHub : repo Settings → Deploy keys → Add deploy key  (enable "Allow write access" if needed)
+   GitLab : repo Settings → Repository → Deploy keys
+
+   Press Enter when done to launch the sandbox...
+   ```
+5. Save `{ "type": "ssh", "keyPath": "<path>" }` and proceed with launch
+
+**Option 2 — Use existing key:**
+Prompt `SSH key path: _`, verify file exists, save and launch.
+
+**Option 3 — Skip:**
+Save `{ "type": "none" }` and launch immediately.
+
+**Clipboard detection (WSL2):**
+Detect WSL via `uname -r` containing `microsoft`; use `clip.exe`. Fallback: print to console.
 
 ### Subcommands
 
