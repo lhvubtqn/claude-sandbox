@@ -31,7 +31,8 @@ ENV HOME=/home/claude
 
 # Pre-create dirs that are backed by named volumes — Docker initializes a named
 # volume from the image only if the volume is empty, so ownership must be set here.
-RUN mkdir -p /home/claude/.vscode-server
+RUN mkdir -p /home/claude/.vscode-server /home/claude/.ssh && \
+    chmod 700 /home/claude/.ssh
 
 # Rust, Solana CLI, Anchor, Node.js, Yarn — official all-in-one install
 RUN curl --proto '=https' --tlsv1.2 -sSfL https://solana-install.solana.workers.dev | bash
