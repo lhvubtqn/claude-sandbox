@@ -19,6 +19,7 @@ A Docker sandbox for running [Claude Code](https://claude.ai/code) with `--dange
 - [VS Code](https://code.visualstudio.com/) with the [Remote - Containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) extension
 - [fish shell](https://fishshell.com/)
 - `xxd` (`sudo apt install xxd` if missing)
+- `jq` (`sudo apt install jq` if missing)
 
 ## Setup
 
@@ -28,20 +29,28 @@ A Docker sandbox for running [Claude Code](https://claude.ai/code) with `--dange
 git clone https://github.com/lhvubtqn/claude-sandbox ~/.claude-sandbox
 ```
 
-**2. Install the fish function**
+**2. Copy your git identity into the sandbox**
+
+```bash
+cp ~/.gitconfig ~/.claude-sandbox/.gitconfig
+```
+
+This creates a sandbox-local git config that lives in the repo and is mounted into the container. Edit it independently from your host `~/.gitconfig` if needed.
+
+**3. Install the fish function**
 
 ```bash
 mkdir -p ~/.config/fish/functions
 cp ~/.claude-sandbox/functions/claude-sandbox.fish ~/.config/fish/functions/
 ```
 
-**3. Build the image** (takes 10–20 minutes on first run)
+**4. Build the image** (takes 10–20 minutes on first run)
 
 ```bash
 PROJECT_PATH=/tmp PROJECT_NAME=build docker compose -f ~/.claude-sandbox/docker-compose.yml build
 ```
 
-**4. Log in to Claude** inside the container (one-time setup)
+**5. Log in to Claude** inside the container (one-time setup)
 
 ```bash
 claude-sandbox  # from any project folder
@@ -76,7 +85,7 @@ claude --dangerously-skip-permissions
 - **Claude auth**: `~/.claude` is bind-mounted from the host — your subscription login carries over automatically.
 - **Persistent caches**: named Docker volumes keep Cargo, npm, Solana config, and the VS Code Server across restarts and image rebuilds.
 - **Host networking**: services running on the host (e.g. Godot MCP) are reachable inside the container at `host.docker.internal:<port>`.
-- **Git commits work, push doesn't**: no SSH keys or credentials are mounted, so Claude can commit locally but cannot push.
+- **Per-repo SSH credentials**: on first launch in a project, a wizard prompts you to generate a deploy key, use an existing key, or skip. Your choice is saved per project path — subsequent launches are silent. See [Git credentials](#git-credentials) below.
 
 ## Volume map
 
@@ -90,8 +99,34 @@ claude --dangerously-skip-permissions
 | `vscode-server` | `/home/claude/.vscode-server` | VS Code Server (survives restarts) |
 | `claude-config` | `/home/claude/.claude` | Claude Code auth, config, and session |
 | `~/.claude.json` (bind) | `/home/claude/.claude.json` | Claude Code account state and onboarding flags |
-| `~/.gitconfig` (bind, ro) | `/home/claude/.gitconfig` | Git identity (name, email, aliases) |
+| `.gitconfig` (bind, ro) | `/home/claude/.gitconfig` | Git identity — repo-local copy, edit independently from host |
+| `$SANDBOX_SSH_KEY_PATH` (bind, ro) | `/home/claude/.ssh/repo_key` | Per-project SSH deploy key (omitted when no key configured) |
 | `$PROJECT_PATH` (bind) | `/workspace/$PROJECT_NAME` | Your project files |
+
+## Git credentials
+
+On the first `claude-sandbox` launch in any project, a wizard runs:
+
+```
+No SSH credentials configured for "/home/you/your-project".
+
+  1. Generate a new deploy key
+  2. Use an existing key
+  3. Skip (no git credentials)
+
+Choice: _
+```
+
+Option 1 runs `ssh-keygen`, copies the public key to your clipboard, and walks you through adding it as a deploy key in GitHub or GitLab before launching. Options 2 and 3 save immediately. Your choice is remembered per project path in `~/.claude-sandbox/project-creds.json`.
+
+Manage credentials with subcommands (run from the project directory):
+
+```bash
+claude-sandbox creds set [key-path]   # reconfigure (runs wizard if no path given)
+claude-sandbox creds show             # print saved credential for current project
+claude-sandbox creds clear            # remove saved credential (will prompt on next launch)
+claude-sandbox creds list             # list all saved project credentials
+```
 
 ## Rebuilding
 
