@@ -61,6 +61,64 @@ function _sandbox_copy_pubkey
     end
 end
 
+function _sandbox_creds_wizard
+    # Usage: _sandbox_creds_wizard <project_path> <project_name>
+    # Runs the interactive credential setup wizard.
+    # On success, writes entry to project-creds.json and returns 0.
+    set -l project_path $argv[1]
+    set -l project_name $argv[2]
+
+    echo ""
+    echo "No SSH credentials configured for \"$project_path\"."
+    echo ""
+    echo "  1. Generate a new deploy key"
+    echo "  2. Use an existing key"
+    echo "  3. Skip (no git credentials)"
+    echo ""
+    read -P "Choice: " choice
+
+    switch $choice
+        case 1
+            set -l default_path $HOME/.ssh/id_ed25519_$project_name
+            read -P "Key path [$default_path]: " key_path
+            if test -z "$key_path"
+                set key_path $default_path
+            else
+                set key_path (_sandbox_expand_path $key_path)
+            end
+
+            ssh-keygen -t ed25519 -f $key_path -C "$project_name deploy key" -N ""
+            or return 1
+
+            echo ""
+            echo "Key generated at $key_path"
+            _sandbox_copy_pubkey "$key_path.pub"
+            echo ""
+            echo "GitHub : repo Settings → Deploy keys → Add deploy key  (enable \"Allow write access\" if needed)"
+            echo "GitLab : repo Settings → Repository → Deploy keys"
+            echo ""
+            read -P "Press Enter when done to launch the sandbox..." _dummy
+
+            _sandbox_creds_write_ssh $project_path $key_path
+
+        case 2
+            read -P "SSH key path: " key_path
+            set key_path (_sandbox_expand_path $key_path)
+            if not test -f $key_path
+                echo "Error: key file not found: $key_path"
+                return 1
+            end
+            _sandbox_creds_write_ssh $project_path $key_path
+
+        case 3
+            _sandbox_creds_write_none $project_path
+
+        case '*'
+            echo "Error: invalid choice '$choice'"
+            return 1
+    end
+end
+
 function claude-sandbox
     set PROJECT_PATH (pwd)
     set PROJECT_NAME (basename $PROJECT_PATH)
