@@ -15,7 +15,7 @@ services:
       - claude-config:/home/claude/.claude
       - ${HOME}/.claude.json:/home/claude/.claude.json
       - .gitconfig:/home/claude/.gitconfig:ro
-      - ${SANDBOX_SSH_KEY_PATH:-.ssh_placeholder}:/home/claude/.ssh/repo_key:ro
+      - ${SANDBOX_SSH_KEY_PATH:-.placeholder/ssh_placeholder}:/home/claude/.ssh/repo_key:ro
       - cargo-registry:/home/claude/.cargo/registry
       - cargo-git:/home/claude/.cargo/git
       - rustup-downloads:/home/claude/.rustup/downloads
