@@ -120,19 +120,83 @@ function _sandbox_creds_wizard
 end
 
 function claude-sandbox
-    set PROJECT_PATH (pwd)
-    set PROJECT_NAME (basename $PROJECT_PATH)
-    set SANDBOX_DIR $HOME/.claude-sandbox
+    set -l PROJECT_PATH (pwd)
+    set -l PROJECT_NAME (basename $PROJECT_PATH)
+    set -l SANDBOX_DIR $HOME/.claude-sandbox
 
+    # --- creds subcommand ---
+    if test (count $argv) -gt 0; and test $argv[1] = creds
+        set -l action $argv[2]
+        switch $action
+            case set
+                if test (count $argv) -ge 3
+                    set -l key_path (_sandbox_expand_path $argv[3])
+                    if not test -f $key_path
+                        echo "Error: key file not found: $key_path"
+                        return 1
+                    end
+                    _sandbox_creds_write_ssh $PROJECT_PATH $key_path
+                    echo "Saved SSH key for $PROJECT_PATH"
+                else
+                    _sandbox_creds_wizard $PROJECT_PATH $PROJECT_NAME
+                end
+            case show
+                set -l t (_sandbox_creds_read_type $PROJECT_PATH)
+                if test -z "$t"
+                    echo "No credentials configured for $PROJECT_PATH"
+                else if test "$t" = ssh
+                    echo "type: ssh"
+                    echo "keyPath: "(_sandbox_creds_read_key $PROJECT_PATH)
+                else
+                    echo "type: none (no git credentials)"
+                end
+            case clear
+                _sandbox_creds_delete $PROJECT_PATH
+                echo "Cleared credentials for $PROJECT_PATH (will prompt on next launch)"
+            case list
+                set -l f (_sandbox_creds_file)
+                if not test -f $f
+                    echo "No credentials configured."
+                    return
+                end
+                jq -r 'to_entries[] | "\(.key)\n  type: \(.value.type)" + (if .value.keyPath then "\n  keyPath: \(.value.keyPath)" else "" end)' $f
+            case '*'
+                echo "Usage: claude-sandbox creds {set [key-path]|show|clear|list}"
+                return 1
+        end
+        return
+    end
+
+    # --- launch flow ---
     if not docker info > /dev/null 2>&1
         echo "Error: Docker is not running. Please start Docker Desktop first."
         return 1
     end
 
-    set -x PROJECT_PATH $PROJECT_PATH
-    set -x PROJECT_NAME $PROJECT_NAME
+    # Resolve credentials for this project
+    set -l creds_type (_sandbox_creds_read_type $PROJECT_PATH)
+    if test -z "$creds_type"
+        _sandbox_creds_wizard $PROJECT_PATH $PROJECT_NAME
+        or return 1
+        set creds_type (_sandbox_creds_read_type $PROJECT_PATH)
+    end
+
+    # Clear any previously exported value before conditionally setting
+    set -e SANDBOX_SSH_KEY_PATH
+    if test "$creds_type" = ssh
+        set -l key_path (_sandbox_creds_read_key $PROJECT_PATH)
+        if not test -f $key_path
+            echo "Error: SSH key not found: $key_path"
+            echo "Run 'claude-sandbox creds set' to reconfigure."
+            return 1
+        end
+        set -x SANDBOX_SSH_KEY_PATH $key_path
+    end
 
     echo "Starting sandbox for $PROJECT_NAME..."
+
+    set -x PROJECT_PATH $PROJECT_PATH
+    set -x PROJECT_NAME $PROJECT_NAME
 
     if not docker compose -f $SANDBOX_DIR/docker-compose.yml up -d --force-recreate
         echo "Error: Failed to start the sandbox container."
