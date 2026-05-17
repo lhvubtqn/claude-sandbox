@@ -19,7 +19,7 @@ A Docker sandbox for running [Claude Code](https://claude.ai/code) with `--dange
 - [VS Code](https://code.visualstudio.com/) with the [Remote - Containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) extension
 - [fish shell](https://fishshell.com/)
 - `xxd` (`sudo apt install xxd` if missing)
-- `jq` (`sudo apt install jq` if missing)
+- `yq` (`sudo apt install yq` if missing)
 
 ## Setup
 
@@ -47,7 +47,7 @@ cp ~/.claude-sandbox/functions/claude-sandbox.fish ~/.config/fish/functions/
 **4. Build the image** (takes 10–20 minutes on first run)
 
 ```bash
-PROJECT_PATH=/tmp PROJECT_NAME=build docker compose -f ~/.claude-sandbox/docker-compose.yml build
+docker compose -f ~/.claude-sandbox/docker-compose.yml build
 ```
 
 **5. Log in to Claude** inside the container (one-time setup)
@@ -97,10 +97,9 @@ claude --dangerously-skip-permissions
 | `npm-cache` | `/root/.npm` | npm cache |
 | `solana-config` | `/root/.config/solana` | Solana keypairs and config |
 | `vscode-server` | `/home/claude/.vscode-server` | VS Code Server (survives restarts) |
-| `claude-config` | `/home/claude/.claude` | Claude Code auth, config, and session |
-| `~/.claude.json` (bind) | `/home/claude/.claude.json` | Claude Code account state and onboarding flags |
+| `claude-config` | `/home/claude/.claude` | Claude Code auth, config, and session; `.claude.json` lives here and is symlinked to `/home/claude/.claude.json` by the entrypoint |
 | `.gitconfig` (bind, ro) | `/home/claude/.gitconfig` | Git identity — repo-local copy, edit independently from host |
-| `$SANDBOX_SSH_KEY_PATH` (bind, ro) | `/home/claude/.ssh/repo_key` | Per-project SSH deploy key (omitted when no key configured) |
+| SSH deploy key (bind, ro) | `/home/claude/.ssh/repo_key` | Per-project SSH deploy key; included in the generated override file when configured |
 | `$PROJECT_PATH` (bind) | `/workspace/$PROJECT_NAME` | Your project files |
 
 ## Git credentials
@@ -117,7 +116,7 @@ No SSH credentials configured for "/home/you/your-project".
 Choice: _
 ```
 
-Option 1 runs `ssh-keygen`, copies the public key to your clipboard, and walks you through adding it as a deploy key in GitHub or GitLab before launching. Options 2 and 3 save immediately. Your choice is remembered per project path in `~/.claude-sandbox/project-creds.json`.
+Option 1 runs `ssh-keygen`, copies the public key to your clipboard, and walks you through adding it as a deploy key in GitHub or GitLab before launching. Options 2 and 3 save immediately. Your choice is remembered per project path in `~/.claude-sandbox/configurations.yml`.
 
 Manage credentials with subcommands (run from the project directory):
 
@@ -128,12 +127,23 @@ claude-sandbox creds clear            # remove saved credential (will prompt on 
 claude-sandbox creds list             # list all saved project credentials
 ```
 
+Mount additional host resources (executables, assets, etc.) into the container on a per-project basis:
+
+```bash
+claude-sandbox mounts add /opt/godot:/usr/local/bin/godot:ro   # bind a host path into the container
+claude-sandbox mounts list                                       # show configured mounts for current project
+claude-sandbox mounts remove /opt/godot:/usr/local/bin/godot:ro # remove a mount
+claude-sandbox mounts clear                                      # remove all extra mounts for current project
+```
+
+Mount specs use Docker bind-mount syntax: `<host-path>:<container-path>[:<options>]`. Common options: `ro` (read-only).
+
 ## Rebuilding
 
 After pulling changes or updating tool versions:
 
 ```bash
-PROJECT_PATH=/tmp PROJECT_NAME=build docker compose -f ~/.claude-sandbox/docker-compose.yml build
+docker compose -f ~/.claude-sandbox/docker-compose.yml build
 ```
 
 Named volumes are preserved across rebuilds.
