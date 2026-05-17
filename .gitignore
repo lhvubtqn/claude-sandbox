@@ -1,2 +1,4 @@
 .env
 project-creds.json
+configurations.yml
+docker-compose.override.yml
