@@ -10,4 +10,6 @@ Host *
 EOF
     chmod 600 /home/claude/.ssh/config
 fi
+[ -f /home/claude/.claude/.claude.json ] || echo '{}' > /home/claude/.claude/.claude.json
+ln -sf /home/claude/.claude/.claude.json /home/claude/.claude.json
 exec "$@"
