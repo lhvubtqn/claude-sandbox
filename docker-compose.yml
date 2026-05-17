@@ -4,18 +4,13 @@ services:
     image: claude-sandbox
     container_name: claude-sandbox
     hostname: claude-sandbox
-    working_dir: /workspace/${PROJECT_NAME:-placeholder}
     command: sleep infinity
     security_opt:
       - seccomp=unconfined
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ${PROJECT_PATH:-/tmp}:/workspace/${PROJECT_NAME:-placeholder}
       - claude-config:/home/claude/.claude
-      - ${HOME}/.claude.json:/home/claude/.claude.json
-      - .gitconfig:/home/claude/.gitconfig:ro
-      - ${SANDBOX_SSH_KEY_PATH:-.placeholder/ssh_key}:/home/claude/.ssh/repo_key:ro
       - cargo-registry:/home/claude/.cargo/registry
       - cargo-git:/home/claude/.cargo/git
       - rustup-downloads:/home/claude/.rustup/downloads

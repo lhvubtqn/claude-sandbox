@@ -1,46 +1,84 @@
-function _sandbox_creds_file
-    echo $HOME/.claude-sandbox/project-creds.json
+function _sandbox_config_file
+    echo $HOME/.claude-sandbox/configurations.yml
 end
 
-function _sandbox_creds_read_type
+function _sandbox_config_read_creds_type
     # Returns "ssh", "none", or empty string if no entry exists
-    set -l f (_sandbox_creds_file)
+    set -l f (_sandbox_config_file)
     test -f $f; or begin; echo ""; return; end
-    jq -r --arg p $argv[1] '.[$p].type // empty' $f
+    yq -r --arg p $argv[1] '.[$p].credentials.type // empty' $f 2>/dev/null
 end
 
-function _sandbox_creds_read_key
+function _sandbox_config_read_creds_key
     # Returns keyPath or empty string
-    set -l f (_sandbox_creds_file)
+    set -l f (_sandbox_config_file)
     test -f $f; or begin; echo ""; return; end
-    jq -r --arg p $argv[1] '.[$p].keyPath // empty' $f
+    yq -r --arg p $argv[1] '.[$p].credentials.keyPath // empty' $f 2>/dev/null
 end
 
-function _sandbox_creds_write_ssh
-    # Usage: _sandbox_creds_write_ssh <project_path> <key_path>
-    set -l f (_sandbox_creds_file)
+function _sandbox_config_write_creds_ssh
+    # Usage: _sandbox_config_write_creds_ssh <project_path> <key_path>
+    set -l f (_sandbox_config_file)
     test -f $f; or echo '{}' > $f
     set -l tmp (mktemp)
-    jq --arg p $argv[1] --arg k $argv[2] \
-        '.[$p] = {"type": "ssh", "keyPath": $k}' $f > $tmp
+    yq -y --arg p $argv[1] --arg k $argv[2] \
+        '.[$p].credentials = {"type": "ssh", "keyPath": $k}' $f > $tmp
     and mv $tmp $f
 end
 
-function _sandbox_creds_write_none
-    # Usage: _sandbox_creds_write_none <project_path>
-    set -l f (_sandbox_creds_file)
+function _sandbox_config_write_creds_none
+    # Usage: _sandbox_config_write_creds_none <project_path>
+    set -l f (_sandbox_config_file)
     test -f $f; or echo '{}' > $f
     set -l tmp (mktemp)
-    jq --arg p $argv[1] '.[$p] = {"type": "none"}' $f > $tmp
+    yq -y --arg p $argv[1] \
+        '.[$p].credentials = {"type": "none"}' $f > $tmp
     and mv $tmp $f
 end
 
-function _sandbox_creds_delete
-    # Usage: _sandbox_creds_delete <project_path>
-    set -l f (_sandbox_creds_file)
+function _sandbox_config_delete
+    # Usage: _sandbox_config_delete <project_path>
+    set -l f (_sandbox_config_file)
     test -f $f; or return
     set -l tmp (mktemp)
-    jq --arg p $argv[1] 'del(.[$p])' $f > $tmp
+    yq -y --arg p $argv[1] 'del(.[$p])' $f > $tmp
+    and mv $tmp $f
+end
+
+function _sandbox_mounts_list
+    # Usage: _sandbox_mounts_list <project_path>
+    # Prints each mount spec on its own line; prints nothing if no mounts configured
+    set -l f (_sandbox_config_file)
+    test -f $f; or return
+    yq -r --arg p $argv[1] '.[$p].mounts // [] | .[]' $f 2>/dev/null
+end
+
+function _sandbox_mounts_add
+    # Usage: _sandbox_mounts_add <project_path> <mount_spec>
+    set -l f (_sandbox_config_file)
+    test -f $f; or echo '{}' > $f
+    set -l tmp (mktemp)
+    yq -y --arg p $argv[1] --arg m $argv[2] \
+        '.[$p].mounts = ((.[$p].mounts // []) + [$m])' $f > $tmp
+    and mv $tmp $f
+end
+
+function _sandbox_mounts_remove
+    # Usage: _sandbox_mounts_remove <project_path> <mount_spec>
+    set -l f (_sandbox_config_file)
+    test -f $f; or return
+    set -l tmp (mktemp)
+    yq -y --arg p $argv[1] --arg m $argv[2] \
+        '.[$p].mounts = [(.[$p].mounts // [])[] | select(. != $m)]' $f > $tmp
+    and mv $tmp $f
+end
+
+function _sandbox_mounts_clear
+    # Usage: _sandbox_mounts_clear <project_path>
+    set -l f (_sandbox_config_file)
+    test -f $f; or return
+    set -l tmp (mktemp)
+    yq -y --arg p $argv[1] 'del(.[$p].mounts)' $f > $tmp
     and mv $tmp $f
 end
 
@@ -51,7 +89,6 @@ end
 
 function _sandbox_copy_pubkey
     # Usage: _sandbox_copy_pubkey <pubkey_file_path>
-    # Copies content to clipboard on WSL2; falls back to printing content
     if uname -r | grep -qi microsoft
         cat $argv[1] | clip.exe
         and echo "Public key copied to clipboard."
@@ -61,10 +98,52 @@ function _sandbox_copy_pubkey
     end
 end
 
+function _sandbox_migrate_from_json
+    # Auto-migrate project-creds.json -> configurations.yml on first run after update
+    set -l old_f $HOME/.claude-sandbox/project-creds.json
+    set -l new_f (_sandbox_config_file)
+    test -f $old_f; or return
+    test -f $new_f; and return
+    echo "Migrating project-creds.json to configurations.yml..."
+    set -l tmp (mktemp)
+    jq 'to_entries | map({key: .key, value: {credentials: .value}}) | from_entries' $old_f \
+        | yq -y . > $tmp
+    and mv $tmp $new_f
+    and rm $old_f
+    and echo "Migration complete."
+end
+
+function _sandbox_generate_override
+    # Usage: _sandbox_generate_override <project_path> <project_name>
+    # Writes ~/.claude-sandbox/docker-compose.override.yml
+    set -l project_path $argv[1]
+    set -l project_name $argv[2]
+    set -l sandbox_dir $HOME/.claude-sandbox
+    set -l out $sandbox_dir/docker-compose.override.yml
+
+    set -l volumes \
+        "      - $project_path:/workspace/$project_name" \
+        "      - $sandbox_dir/.gitconfig:/home/claude/.gitconfig:ro"
+
+    set -l creds_type (_sandbox_config_read_creds_type $project_path)
+    if test "$creds_type" = ssh
+        set -l key_path (_sandbox_config_read_creds_key $project_path)
+        set volumes $volumes "      - $key_path:/home/claude/.ssh/repo_key:ro"
+    end
+
+    for m in (_sandbox_mounts_list $project_path)
+        set volumes $volumes "      - $m"
+    end
+
+    printf 'services:\n  claude-sandbox:\n    working_dir: /workspace/%s\n    volumes:\n' \
+        $project_name > $out
+    for vol in $volumes
+        printf '%s\n' $vol >> $out
+    end
+end
+
 function _sandbox_creds_wizard
     # Usage: _sandbox_creds_wizard <project_path> <project_name>
-    # Runs the interactive credential setup wizard.
-    # On success, writes entry to project-creds.json and returns 0.
     set -l project_path $argv[1]
     set -l project_name $argv[2]
 
@@ -94,12 +173,12 @@ function _sandbox_creds_wizard
             echo "Key generated at $key_path"
             _sandbox_copy_pubkey "$key_path.pub"
             echo ""
-            echo "GitHub : repo Settings → Deploy keys → Add deploy key  (enable \"Allow write access\" if needed)"
-            echo "GitLab : repo Settings → Repository → Deploy keys"
+            echo "GitHub : repo Settings -> Deploy keys -> Add deploy key  (enable \"Allow write access\" if needed)"
+            echo "GitLab : repo Settings -> Repository -> Deploy keys"
             echo ""
             read -P "Press Enter when done to launch the sandbox..." _dummy
 
-            _sandbox_creds_write_ssh $project_path $key_path
+            _sandbox_config_write_creds_ssh $project_path $key_path
 
         case 2
             read -P "SSH key path: " key_path
@@ -108,10 +187,10 @@ function _sandbox_creds_wizard
                 echo "Error: key file not found: $key_path"
                 return 1
             end
-            _sandbox_creds_write_ssh $project_path $key_path
+            _sandbox_config_write_creds_ssh $project_path $key_path
 
         case 3
-            _sandbox_creds_write_none $project_path
+            _sandbox_config_write_creds_none $project_path
 
         case '*'
             echo "Error: invalid choice '$choice'"
@@ -135,33 +214,70 @@ function claude-sandbox
                         echo "Error: key file not found: $key_path"
                         return 1
                     end
-                    _sandbox_creds_write_ssh $PROJECT_PATH $key_path
+                    _sandbox_config_write_creds_ssh $PROJECT_PATH $key_path
                     echo "Saved SSH key for $PROJECT_PATH"
                 else
                     _sandbox_creds_wizard $PROJECT_PATH $PROJECT_NAME
                 end
             case show
-                set -l t (_sandbox_creds_read_type $PROJECT_PATH)
+                set -l t (_sandbox_config_read_creds_type $PROJECT_PATH)
                 if test -z "$t"
                     echo "No credentials configured for $PROJECT_PATH"
                 else if test "$t" = ssh
                     echo "type: ssh"
-                    echo "keyPath: "(_sandbox_creds_read_key $PROJECT_PATH)
+                    echo "keyPath: "(_sandbox_config_read_creds_key $PROJECT_PATH)
                 else
                     echo "type: none (no git credentials)"
                 end
             case clear
-                _sandbox_creds_delete $PROJECT_PATH
+                _sandbox_config_delete $PROJECT_PATH
                 echo "Cleared credentials for $PROJECT_PATH (will prompt on next launch)"
             case list
-                set -l f (_sandbox_creds_file)
+                set -l f (_sandbox_config_file)
                 if not test -f $f
                     echo "No credentials configured."
                     return
                 end
-                jq -r 'to_entries[] | "\(.key)\n  type: \(.value.type)" + (if .value.keyPath then "\n  keyPath: \(.value.keyPath)" else "" end)' $f
+                yq -r 'to_entries[] | "\(.key)\n  type: \(.value.credentials.type)" + (if .value.credentials.keyPath then "\n  keyPath: \(.value.credentials.keyPath)" else "" end)' $f
             case '*'
                 echo "Usage: claude-sandbox creds {set [key-path]|show|clear|list}"
+                return 1
+        end
+        return
+    end
+
+    # --- mounts subcommand ---
+    if test (count $argv) -gt 0; and test $argv[1] = mounts
+        set -l action $argv[2]
+        switch $action
+            case add
+                if test (count $argv) -lt 3
+                    echo "Usage: claude-sandbox mounts add <source>:<target>[:<options>]"
+                    return 1
+                end
+                _sandbox_mounts_add $PROJECT_PATH $argv[3]
+                echo "Added mount for $PROJECT_PATH: $argv[3]"
+            case remove
+                if test (count $argv) -lt 3
+                    echo "Usage: claude-sandbox mounts remove <source>:<target>[:<options>]"
+                    return 1
+                end
+                _sandbox_mounts_remove $PROJECT_PATH $argv[3]
+                echo "Removed mount for $PROJECT_PATH: $argv[3]"
+            case list
+                set -l mounts (_sandbox_mounts_list $PROJECT_PATH)
+                if test (count $mounts) -eq 0
+                    echo "No extra mounts configured for $PROJECT_PATH"
+                else
+                    for m in $mounts
+                        echo $m
+                    end
+                end
+            case clear
+                _sandbox_mounts_clear $PROJECT_PATH
+                echo "Cleared all mounts for $PROJECT_PATH"
+            case '*'
+                echo "Usage: claude-sandbox mounts {add <spec>|remove <spec>|list|clear}"
                 return 1
         end
         return
@@ -173,30 +289,31 @@ function claude-sandbox
         return 1
     end
 
+    # Auto-migrate from legacy project-creds.json
+    _sandbox_migrate_from_json
+
     # Resolve credentials for this project
-    set -l creds_type (_sandbox_creds_read_type $PROJECT_PATH)
+    set -l creds_type (_sandbox_config_read_creds_type $PROJECT_PATH)
     if test -z "$creds_type"
         _sandbox_creds_wizard $PROJECT_PATH $PROJECT_NAME
         or return 1
-        set creds_type (_sandbox_creds_read_type $PROJECT_PATH)
+        set creds_type (_sandbox_config_read_creds_type $PROJECT_PATH)
     end
 
-    # Clear any previously exported value before conditionally setting
-    set -e SANDBOX_SSH_KEY_PATH
+    # Verify SSH key exists if configured
     if test "$creds_type" = ssh
-        set -l key_path (_sandbox_creds_read_key $PROJECT_PATH)
+        set -l key_path (_sandbox_config_read_creds_key $PROJECT_PATH)
         if not test -f $key_path
             echo "Error: SSH key not found: $key_path"
             echo "Run 'claude-sandbox creds set' to reconfigure."
             return 1
         end
-        set -x SANDBOX_SSH_KEY_PATH $key_path
     end
 
     echo "Starting sandbox for $PROJECT_NAME..."
 
-    set -x PROJECT_PATH $PROJECT_PATH
-    set -x PROJECT_NAME $PROJECT_NAME
+    # Generate docker-compose.override.yml for this project
+    _sandbox_generate_override $PROJECT_PATH $PROJECT_NAME
 
     if not docker compose -f $SANDBOX_DIR/docker-compose.yml up -d --force-recreate
         echo "Error: Failed to start the sandbox container."
