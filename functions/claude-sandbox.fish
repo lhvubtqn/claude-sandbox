@@ -41,7 +41,7 @@ function _sandbox_config_delete
     set -l f (_sandbox_config_file)
     test -f $f; or return
     set -l tmp (mktemp)
-    yq -y --arg p $argv[1] 'del(.[$p])' $f > $tmp
+    yq -y --arg p $argv[1] 'del(.[$p].credentials)' $f > $tmp
     and mv $tmp $f
 end
 
@@ -67,6 +67,8 @@ function _sandbox_mounts_remove
     # Usage: _sandbox_mounts_remove <project_path> <mount_spec>
     set -l f (_sandbox_config_file)
     test -f $f; or return
+    set -l count (yq -r --arg p $argv[1] '.[$p].mounts | length' $f 2>/dev/null)
+    test "$count" -gt 0 2>/dev/null; or return
     set -l tmp (mktemp)
     yq -y --arg p $argv[1] --arg m $argv[2] \
         '.[$p].mounts = [(.[$p].mounts // [])[] | select(. != $m)]' $f > $tmp
@@ -238,7 +240,7 @@ function claude-sandbox
                     echo "No credentials configured."
                     return
                 end
-                yq -r 'to_entries[] | "\(.key)\n  type: \(.value.credentials.type)" + (if .value.credentials.keyPath then "\n  keyPath: \(.value.credentials.keyPath)" else "" end)' $f
+                yq -r 'to_entries[] | select(.value.credentials != null) | "\(.key)\n  type: \(.value.credentials.type)" + (if .value.credentials.keyPath then "\n  keyPath: \(.value.credentials.keyPath)" else "" end)' $f
             case '*'
                 echo "Usage: claude-sandbox creds {set [key-path]|show|clear|list}"
                 return 1
@@ -315,7 +317,7 @@ function claude-sandbox
     # Generate docker-compose.override.yml for this project
     _sandbox_generate_override $PROJECT_PATH $PROJECT_NAME
 
-    if not docker compose -f $SANDBOX_DIR/docker-compose.yml up -d --force-recreate
+    if not docker compose -f $SANDBOX_DIR/docker-compose.yml -f $SANDBOX_DIR/docker-compose.override.yml up -d --force-recreate
         echo "Error: Failed to start the sandbox container."
         return 1
     end
