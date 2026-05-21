@@ -99,7 +99,7 @@ claude --dangerously-skip-permissions
 | `vscode-server` | `/home/claude/.vscode-server` | VS Code Server (survives restarts) |
 | `claude-config` | `/home/claude/.claude` | Claude Code auth, config, and session; `.claude.json` lives here and is symlinked to `/home/claude/.claude.json` by the entrypoint |
 | `.gitconfig` (bind, ro) | `/home/claude/.gitconfig` | Git identity — repo-local copy, edit independently from host |
-| SSH deploy key (bind, ro) | `/home/claude/.ssh/repo_key` | Per-project SSH deploy key; included in the generated override file when configured |
+| SSH deploy key (bind, ro) | `/home/claude/.ssh/deploy_key` | Per-project SSH deploy key; included in the generated override file when configured |
 | `$PROJECT_PATH` (bind) | `/workspace/$PROJECT_NAME` | Your project files |
 
 ## Git credentials

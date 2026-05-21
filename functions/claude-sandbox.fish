@@ -130,7 +130,7 @@ function _sandbox_generate_override
     set -l creds_type (_sandbox_config_read_creds_type $project_path)
     if test "$creds_type" = ssh
         set -l key_path (_sandbox_config_read_creds_key $project_path)
-        set volumes $volumes "      - $key_path:/home/claude/.ssh/repo_key:ro"
+        set volumes $volumes "      - $key_path:/home/claude/.ssh/deploy_key:ro"
     end
 
     for m in (_sandbox_mounts_list $project_path)

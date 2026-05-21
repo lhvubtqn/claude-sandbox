@@ -50,6 +50,9 @@ RUN bash -c "source $NVM_DIR/nvm.sh && \
 # Claude Code
 RUN curl -fsSL https://claude.ai/install.sh | bash
 
+RUN printf '#!/bin/sh\nexec claude --dangerously-skip-permissions "$@"\n' \
+    > /home/claude/.local/bin/yolo && chmod +x /home/claude/.local/bin/yolo
+
 COPY --chown=claude:claude entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
