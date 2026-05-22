@@ -13,6 +13,6 @@ global:
       - npm-cache:/home/claude/.npm
       - solana-config:/home/claude/.config/solana
       - vscode-server:/home/claude/.vscode-server
-      - ~/.gitconfig:/home/claude/.gitconfig:ro
+      - ${HOME}/.gitconfig:/home/claude/.gitconfig:ro
       - ${WORKDIR}/skills:/home/claude/.claude/skills:ro
       - ${WORKDIR}/rules:/home/claude/.claude/rules:ro

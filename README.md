@@ -60,7 +60,6 @@ Claude config and session are stored in the `claude-config` named volume — log
 From any project folder:
 
 ```bash
-cd ~/your-project
 claude-sandbox
 ```
 
@@ -70,11 +69,13 @@ This will:
 
 Each project gets its own container — running `claude-sandbox` from a second project opens a second VS Code window without touching the first.
 
-Inside the container, run Claude with full permissions:
+Inside the container, run Claude with full permissions using the `yolo` alias:
 
 ```bash
-claude --dangerously-skip-permissions
+yolo
 ```
+
+This is an alias for `claude --dangerously-skip-permissions`.
 
 ## Managing containers
 
@@ -158,7 +159,7 @@ Always-on volume entries (applied to every container regardless of project) are 
 global:
   container:
     volumes:
-      - ~/.gitconfig:/home/claude/.gitconfig:ro
+      - ${HOME}/.gitconfig:/home/claude/.gitconfig:ro
       - ${WORKDIR}/skills:/home/claude/.claude/skills:ro
       - ${WORKDIR}/rules:/home/claude/.claude/rules:ro
 ```
