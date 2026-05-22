@@ -3,37 +3,73 @@ function _sandbox_config_file
     echo $repo_dir/configurations.yml
 end
 
-function _sandbox_config_read_creds_type
-    # Returns "ssh", "none", or empty string if no entry exists
+function _sandbox_config_read_git_auth_type
     set -l f (_sandbox_config_file)
     test -f $f; or begin; echo ""; return; end
-    yq -r --arg p $argv[1] '.projects[$p].credentials.type // empty' $f 2>/dev/null
+    yq -r --arg p $argv[1] '.projects[$p].git_auth.type // empty' $f 2>/dev/null
 end
 
-function _sandbox_config_read_creds_key
-    # Returns keyPath or empty string
+function _sandbox_config_read_git_auth_path
     set -l f (_sandbox_config_file)
     test -f $f; or begin; echo ""; return; end
-    yq -r --arg p $argv[1] '.projects[$p].credentials.keyPath // empty' $f 2>/dev/null
+    yq -r --arg p $argv[1] '.projects[$p].git_auth.path // empty' $f 2>/dev/null
 end
 
-function _sandbox_config_write_creds_ssh
-    # Usage: _sandbox_config_write_creds_ssh <project_path> <key_path>
+function _sandbox_config_read_git_auth_prefer_ssh
+    set -l f (_sandbox_config_file)
+    test -f $f; or begin; echo ""; return; end
+    yq -r --arg p $argv[1] '.projects[$p].git_auth.prefer_ssh // empty' $f 2>/dev/null
+end
+
+function _sandbox_config_read_git_auth_identity_name
+    set -l f (_sandbox_config_file)
+    test -f $f; or begin; echo ""; return; end
+    yq -r --arg p $argv[1] '.projects[$p].git_auth.identity.name // empty' $f 2>/dev/null
+end
+
+function _sandbox_config_read_git_auth_identity_email
+    set -l f (_sandbox_config_file)
+    test -f $f; or begin; echo ""; return; end
+    yq -r --arg p $argv[1] '.projects[$p].git_auth.identity.email // empty' $f 2>/dev/null
+end
+
+function _sandbox_config_write_git_auth_ssh
+    # Usage: _sandbox_config_write_git_auth_ssh <project_path> <key_path>
     set -l f (_sandbox_config_file)
     test -f $f; or echo '{}' > $f
     set -l tmp (mktemp)
     yq -y --arg p $argv[1] --arg k $argv[2] \
-        '.projects[$p].credentials = {"type": "ssh", "keyPath": $k}' $f > $tmp
+        '.projects[$p].git_auth = {"type": "ssh", "path": $k, "prefer_ssh": true}' $f > $tmp
     and mv $tmp $f
 end
 
-function _sandbox_config_write_creds_none
-    # Usage: _sandbox_config_write_creds_none <project_path>
+function _sandbox_config_write_git_auth_pat
+    # Usage: _sandbox_config_write_git_auth_pat <project_path> <token_path>
+    set -l f (_sandbox_config_file)
+    test -f $f; or echo '{}' > $f
+    set -l tmp (mktemp)
+    yq -y --arg p $argv[1] --arg t $argv[2] \
+        '.projects[$p].git_auth = {"type": "pat", "path": $t}' $f > $tmp
+    and mv $tmp $f
+end
+
+function _sandbox_config_write_git_auth_none
+    # Usage: _sandbox_config_write_git_auth_none <project_path>
     set -l f (_sandbox_config_file)
     test -f $f; or echo '{}' > $f
     set -l tmp (mktemp)
     yq -y --arg p $argv[1] \
-        '.projects[$p].credentials = {"type": "none"}' $f > $tmp
+        '.projects[$p].git_auth = {"type": "none"}' $f > $tmp
+    and mv $tmp $f
+end
+
+function _sandbox_config_write_git_auth_identity
+    # Usage: _sandbox_config_write_git_auth_identity <project_path> <name> <email>
+    set -l f (_sandbox_config_file)
+    test -f $f; or echo '{}' > $f
+    set -l tmp (mktemp)
+    yq -y --arg p $argv[1] --arg n $argv[2] --arg e $argv[3] \
+        '.projects[$p].git_auth.identity = {"name": $n, "email": $e}' $f > $tmp
     and mv $tmp $f
 end
 
@@ -42,7 +78,7 @@ function _sandbox_config_delete
     set -l f (_sandbox_config_file)
     test -f $f; or return
     set -l tmp (mktemp)
-    yq -y --arg p $argv[1] 'del(.projects[$p].credentials)' $f > $tmp
+    yq -y --arg p $argv[1] 'del(.projects[$p].git_auth)' $f > $tmp
     and mv $tmp $f
 end
 
