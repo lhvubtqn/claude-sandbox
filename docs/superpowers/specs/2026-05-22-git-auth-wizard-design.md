@@ -162,6 +162,14 @@ SSH key existence check updated to use `_sandbox_config_read_git_auth_path`.
 
 ---
 
+## Tab Completions (`completions/claude-sandbox.fish`)
+
+- In the `$subcommands` list: replace `creds` with `git-auth`
+- Top-level completion entry: replace `creds` with `git-auth`, update description to `Manage per-project git auth`
+- `creds` actions block: rename guard `__fish_seen_subcommand_from creds` → `git-auth`, update `set` description to `Configure git credentials (SSH or PAT)`
+
+---
+
 ## Error Cases
 
 - PAT token file not found at launch → error + prompt to run `claude-sandbox git-auth set`
