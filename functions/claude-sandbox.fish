@@ -199,11 +199,26 @@ function _sandbox_docker_run
         set args $args -v (_sandbox_expand_vars $vol)
     end
 
-    # SSH deploy key (credentials-managed, not in volumes list)
-    set -l creds_type (_sandbox_config_read_creds_type $project_path)
-    if test "$creds_type" = ssh
-        set -l key_path (_sandbox_expand_vars (_sandbox_config_read_creds_key $project_path))
-        set args $args -v "$key_path:/home/claude/.ssh/deploy_key:ro"
+    # Git auth injection
+    set -l auth_type (_sandbox_config_read_git_auth_type $project_path)
+    set args $args -e "SANDBOX_GIT_AUTH_TYPE=$auth_type"
+    if test "$auth_type" = ssh; or test "$auth_type" = pat
+        set -l creds_path (_sandbox_expand_vars (_sandbox_config_read_git_auth_path $project_path))
+        set args $args -v "$creds_path:/home/claude/.gitcreds:ro"
+    end
+    if test "$auth_type" = ssh
+        set -l prefer_ssh (_sandbox_config_read_git_auth_prefer_ssh $project_path)
+        if test "$prefer_ssh" = true
+            set args $args -e "SANDBOX_GIT_PREFER_SSH=1"
+        end
+    end
+    set -l id_name (_sandbox_config_read_git_auth_identity_name $project_path)
+    set -l id_email (_sandbox_config_read_git_auth_identity_email $project_path)
+    if test -n "$id_name"
+        set args $args -e "SANDBOX_GIT_NAME=$id_name"
+    end
+    if test -n "$id_email"
+        set args $args -e "SANDBOX_GIT_EMAIL=$id_email"
     end
 
     # Project workspace bind mount
