@@ -262,6 +262,47 @@ function claude-sandbox
     # Migrate flat schema to global/projects schema
     _sandbox_migrate_to_nested
 
+    # --- global subcommand ---
+    if test (count $argv) -gt 0; and test $argv[1] = global
+        if test (count $argv) -lt 3; or test $argv[2] != mounts
+            echo "Usage: claude-sandbox global mounts {add <spec>|remove <spec>|list|clear}"
+            return 1
+        end
+        set -l action $argv[3]
+        switch $action
+            case add
+                if test (count $argv) -lt 4
+                    echo "Usage: claude-sandbox global mounts add <source>:<target>[:<options>]"
+                    return 1
+                end
+                _sandbox_global_mounts_add $argv[4]
+                echo "Added global mount: $argv[4]"
+            case remove
+                if test (count $argv) -lt 4
+                    echo "Usage: claude-sandbox global mounts remove <source>:<target>[:<options>]"
+                    return 1
+                end
+                _sandbox_global_mounts_remove $argv[4]
+                echo "Removed global mount: $argv[4]"
+            case list
+                set -l mounts (_sandbox_global_mounts_list)
+                if test (count $mounts) -eq 0
+                    echo "No global mounts configured"
+                else
+                    for m in $mounts
+                        echo $m
+                    end
+                end
+            case clear
+                _sandbox_global_mounts_clear
+                echo "Cleared all global mounts"
+            case '*'
+                echo "Usage: claude-sandbox global mounts {add <spec>|remove <spec>|list|clear}"
+                return 1
+        end
+        return
+    end
+
     # --- creds subcommand ---
     if test (count $argv) -gt 0; and test $argv[1] = creds
         set -l action $argv[2]
