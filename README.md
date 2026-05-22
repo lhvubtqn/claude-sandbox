@@ -37,11 +37,12 @@ cp ~/.gitconfig ~/.claude-sandbox/.gitconfig
 
 This creates a sandbox-local git config that lives in the repo and is mounted into the container. Edit it independently from your host `~/.gitconfig` if needed.
 
-**3. Install the fish function**
+**3. Install the fish function and completions**
 
 ```bash
-mkdir -p ~/.config/fish/functions
+mkdir -p ~/.config/fish/functions ~/.config/fish/completions
 cp ~/.claude-sandbox/functions/claude-sandbox.fish ~/.config/fish/functions/
+cp ~/.claude-sandbox/completions/claude-sandbox.fish ~/.config/fish/completions/
 ```
 
 `configurations.yml` ships with defaults in the repo. Existing installs with an older flat-schema file are auto-migrated on first launch.
@@ -72,8 +73,10 @@ claude-sandbox
 ```
 
 This will:
-1. Start (or restart) the container with your project mounted at `/workspace/your-project`
-2. Open VS Code attached to the running container
+1. Start a new container for this project (or reattach if one is already running)
+2. Open VS Code attached to that container
+
+Each project gets its own container — running `claude-sandbox` from a second project opens a second VS Code window without touching the first.
 
 Inside the container, run Claude with full permissions:
 
@@ -81,11 +84,24 @@ Inside the container, run Claude with full permissions:
 claude --dangerously-skip-permissions
 ```
 
+## Managing containers
+
+Each project runs in its own container that persists until explicitly stopped.
+
+```bash
+claude-sandbox stop        # stop this project's container (from project dir)
+claude-sandbox stop --rm   # stop and remove
+claude-sandbox list        # list all sandbox containers with status
+```
+
+`list` shows all containers created by `claude-sandbox`, their project paths, and their current status.
+
 ## How it works
 
+- **Per-project containers**: each project runs in a dedicated container named `claude-sandbox-<hash>` where the hash is derived from the project path. Running `claude-sandbox` in a project that is already open re-attaches VS Code without restarting the container or interrupting any running Claude session.
 - **Project mount**: your current folder binds to `/workspace/<project-name>`. Each project gets a unique path so `claude -r` sessions stay scoped correctly.
-- **Claude auth**: `~/.claude` is bind-mounted from the host — your subscription login carries over automatically.
-- **Persistent caches**: named Docker volumes keep Cargo, npm, Solana config, and the VS Code Server across restarts and image rebuilds.
+- **Claude auth**: the `claude-config` named volume holds your subscription login — it is shared across all project containers.
+- **Persistent caches**: named Docker volumes keep Cargo, npm, Solana config, and the VS Code Server across restarts and image rebuilds. All project containers share these caches.
 - **Host networking**: services running on the host (e.g. Godot MCP) are reachable inside the container at `host.docker.internal:<port>`.
 - **Per-repo SSH credentials**: on first launch in a project, a wizard prompts you to generate a deploy key, use an existing key, or skip. Your choice is saved per project path — subsequent launches are silent. See [Git credentials](#git-credentials) below.
 
@@ -144,14 +160,15 @@ Mount specs use Docker bind-mount syntax: `<host-path>:<container-path>[:<option
 
 ## Global workspace
 
-Always-on mounts (applied to every sandbox session regardless of project) are listed in `configurations.yml` under `global.mounts`. The defaults, initialized on first launch, are:
+Always-on volume entries (applied to every container regardless of project) are listed in `configurations.yml` under `global.container.volumes`. The defaults, initialized on first launch, are:
 
 ```yaml
 global:
-  mounts:
-    - ~/.claude-sandbox/.gitconfig:/home/claude/.gitconfig:ro
-    - ~/.claude-sandbox/skills:/home/claude/.claude/skills:ro
-    - ~/.claude-sandbox/rules:/home/claude/.claude/rules:ro
+  container:
+    volumes:
+      - ${WORKDIR}/.gitconfig:/home/claude/.gitconfig:ro
+      - ${WORKDIR}/skills:/home/claude/.claude/skills:ro
+      - ${WORKDIR}/rules:/home/claude/.claude/rules:ro
 ```
 
 Add skills to `~/.claude-sandbox/skills/` and rules to `~/.claude-sandbox/rules/` — they are committed to this repo and mounted read-only into every container.
@@ -179,4 +196,3 @@ Named volumes are preserved across rebuilds.
 
 - Per-stack profiles (different extension sets for different languages)
 - Per-project devcontainer configs
-- Multi-agent / swarm setup
