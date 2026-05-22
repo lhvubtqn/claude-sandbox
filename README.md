@@ -37,7 +37,7 @@ Clone it anywhere — the install step sets up the data directory separately.
 cd claude-sandbox && make install
 ```
 
-This copies the fish function and completions, creates `~/.claude-sandbox/` as the data directory (with a default `configurations.yml` if none exists), and symlinks `skills/` and `rules/` from the repo into it.
+This copies the fish function and completions, and writes a small generated helper that records the repo location so `configurations.yml`, `skills/`, and `rules/` are always resolved from the repo directory.
 
 **3. Build the image** (takes 10–20 minutes on first run)
 
@@ -110,8 +110,8 @@ claude-sandbox list        # list all sandbox containers with status
 | `vscode-server` | `/home/claude/.vscode-server` | VS Code Server (survives restarts) |
 | `claude-config` | `/home/claude/.claude` | Claude Code auth, config, and session; `.claude.json` lives here and is symlinked to `/home/claude/.claude.json` by the entrypoint |
 | `~/.gitconfig` (bind, ro) | `/home/claude/.gitconfig` | Git identity from the host |
-| `~/.claude-sandbox/skills/` (bind, ro) | `/home/claude/.claude/skills/` | Custom Claude Code skills, symlinked from the repo by `make install` |
-| `~/.claude-sandbox/rules/` (bind, ro) | `/home/claude/.claude/rules/` | Global Claude Code rules, symlinked from the repo by `make install` |
+| `<repo>/skills/` (bind, ro) | `/home/claude/.claude/skills/` | Custom Claude Code skills, version-controlled in this repo |
+| `<repo>/rules/` (bind, ro) | `/home/claude/.claude/rules/` | Global Claude Code rules, version-controlled in this repo |
 | SSH deploy key (bind, ro) | `/home/claude/.ssh/deploy_key` | Per-project SSH deploy key; included in the generated override file when configured |
 | `$PROJECT_PATH` (bind) | `/workspace/$PROJECT_NAME` | Your project files |
 
@@ -129,7 +129,7 @@ No SSH credentials configured for "/home/you/your-project".
 Choice: _
 ```
 
-Option 1 runs `ssh-keygen`, copies the public key to your clipboard, and walks you through adding it as a deploy key in GitHub or GitLab before launching. Options 2 and 3 save immediately. Your choice is remembered per project path in `configurations.yml` (at `~/.claude-sandbox/configurations.yml`).
+Option 1 runs `ssh-keygen`, copies the public key to your clipboard, and walks you through adding it as a deploy key in GitHub or GitLab before launching. Options 2 and 3 save immediately. Your choice is remembered per project path in `configurations.yml` in the repo.
 
 Manage credentials with subcommands (run from the project directory):
 
@@ -164,9 +164,9 @@ global:
       - ${WORKDIR}/rules:/home/claude/.claude/rules:ro
 ```
 
-`${WORKDIR}` expands to `~/.claude-sandbox/` at runtime. `make install` symlinks `skills/` and `rules/` from the repo there, so edits in the repo are reflected immediately without reinstalling.
+`${WORKDIR}` expands to the repo directory at runtime (recorded by `make install`). `skills/` and `rules/` are resolved directly from the repo — edits are reflected immediately without reinstalling.
 
-Add skills to the repo's `skills/` directory and rules to `rules/` — they are mounted read-only into every container.
+Add skills to `skills/` and rules to `rules/` in the repo — they are mounted read-only into every container.
 
 Manage global mounts with subcommands (run from any directory):
 

@@ -1,5 +1,5 @@
 function _sandbox_config_file
-    echo $HOME/.claude-sandbox/configurations.yml
+    echo (_sandbox_repo_dir)/configurations.yml
 end
 
 function _sandbox_config_read_creds_type
