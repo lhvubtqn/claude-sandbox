@@ -82,16 +82,15 @@ end
 function _sandbox_global_mounts_list
     set -l f (_sandbox_config_file)
     test -f $f; or return
-    yq -r '.global.mounts // [] | .[]' $f 2>/dev/null
+    yq -r '.global.container.volumes // [] | .[]' $f 2>/dev/null
 end
 
 function _sandbox_global_mounts_add
-    # Usage: _sandbox_global_mounts_add <mount_spec>
     set -l f (_sandbox_config_file)
-    test -f $f; or echo 'global: {}' > $f
+    test -f $f; or echo '{}' > $f
     set -l tmp (mktemp)
     yq -y --arg m $argv[1] \
-        '.global.mounts = ((.global.mounts // []) + [$m])' $f > $tmp
+        '.global.container.volumes = ((.global.container.volumes // []) + [$m])' $f > $tmp
     and mv $tmp $f
 end
 
@@ -101,7 +100,7 @@ function _sandbox_global_mounts_remove
     test -f $f; or return
     set -l tmp (mktemp)
     yq -y --arg m $argv[1] \
-        '.global.mounts = [(.global.mounts // [])[] | select(. != $m)]' $f > $tmp
+        '.global.container.volumes = [(.global.container.volumes // [])[] | select(. != $m)]' $f > $tmp
     and mv $tmp $f
 end
 
@@ -109,7 +108,7 @@ function _sandbox_global_mounts_clear
     set -l f (_sandbox_config_file)
     test -f $f; or return
     set -l tmp (mktemp)
-    yq -y 'del(.global.mounts)' $f > $tmp
+    yq -y 'del(.global.container.volumes)' $f > $tmp
     and mv $tmp $f
 end
 
