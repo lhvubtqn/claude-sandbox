@@ -168,15 +168,16 @@ end
 
 function _sandbox_generate_override
     # Usage: _sandbox_generate_override <project_path> <project_name>
-    # Writes ~/.claude-sandbox/docker-compose.override.yml
     set -l project_path $argv[1]
     set -l project_name $argv[2]
-    set -l sandbox_dir $HOME/.claude-sandbox
-    set -l out $sandbox_dir/docker-compose.override.yml
+    set -l out $HOME/.claude-sandbox/docker-compose.override.yml
 
     set -l volumes \
-        "      - $project_path:/workspace/$project_name" \
-        "      - $sandbox_dir/.gitconfig:/home/claude/.gitconfig:ro"
+        "      - $project_path:/workspace/$project_name"
+
+    for m in (_sandbox_global_mounts_list)
+        set volumes $volumes "      - "(_sandbox_expand_path $m)
+    end
 
     set -l creds_type (_sandbox_config_read_creds_type $project_path)
     if test "$creds_type" = ssh
