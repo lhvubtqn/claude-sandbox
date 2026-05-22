@@ -2,27 +2,3 @@ services:
   claude-sandbox:
     build: .
     image: claude-sandbox
-    container_name: claude-sandbox
-    hostname: claude-sandbox
-    command: sleep infinity
-    security_opt:
-      - seccomp=unconfined
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    volumes:
-      - claude-config:/home/claude/.claude
-      - cargo-registry:/home/claude/.cargo/registry
-      - cargo-git:/home/claude/.cargo/git
-      - rustup-downloads:/home/claude/.rustup/downloads
-      - npm-cache:/home/claude/.npm
-      - solana-config:/home/claude/.config/solana
-      - vscode-server:/home/claude/.vscode-server
-
-volumes:
-  claude-config:
-  cargo-registry:
-  cargo-git:
-  rustup-downloads:
-  npm-cache:
-  solana-config:
-  vscode-server:
