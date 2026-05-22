@@ -268,17 +268,19 @@ function _sandbox_git_auth_wizard
     echo "  3. Skip"
     echo ""
     read -P "Choice [default=1]: " choice
+    or return 1
     if test -z "$choice"
         set choice 1
     end
 
     switch $choice
         case 1
-            echo ""
+            echo "Generate a new SSH key or use an existing one?"
             echo "  1. Generate a new key"
             echo "  2. Use an existing key"
             echo ""
             read -P "Choice [default=2]: " ssh_choice
+            or return 1
             if test -z "$ssh_choice"
                 set ssh_choice 2
             end
@@ -287,6 +289,7 @@ function _sandbox_git_auth_wizard
             switch $ssh_choice
                 case 1
                     read -P "Key path [$default_path]: " key_path
+                    or return 1
                     if test -z "$key_path"
                         set key_path $default_path
                     else
@@ -304,9 +307,11 @@ function _sandbox_git_auth_wizard
                     echo "GitLab : repo Settings -> Repository -> Deploy keys"
                     echo ""
                     read -P "Press Enter when done to launch the sandbox..." _dummy
+                    or return 1
 
                 case 2
                     read -P "SSH key path: " key_path
+                    or return 1
                     set key_path (_sandbox_expand_vars $key_path)
                     if not test -f $key_path
                         echo "Error: key file not found: $key_path"
@@ -322,6 +327,7 @@ function _sandbox_git_auth_wizard
 
         case 2
             read -P "Token file path: " token_path
+            or return 1
             set token_path (_sandbox_expand_vars $token_path)
             if not test -f $token_path
                 echo "Error: file not found: $token_path"
@@ -350,6 +356,7 @@ function _sandbox_git_auth_wizard
         set name_prompt "$name_prompt [$default_name]"
     end
     read -P "$name_prompt: " id_name
+    or return 1
     if test -z "$id_name"
         set id_name $default_name
     end
@@ -359,6 +366,7 @@ function _sandbox_git_auth_wizard
         set email_prompt "$email_prompt [$default_email]"
     end
     read -P "$email_prompt: " id_email
+    or return 1
     if test -z "$id_email"
         set id_email $default_email
     end
