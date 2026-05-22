@@ -48,7 +48,7 @@ make -C ~/.claude-sandbox install
 **4. Build the image** (takes 10–20 minutes on first run)
 
 ```bash
-docker compose -f ~/.claude-sandbox/docker-compose.yml build
+make -C ~/.claude-sandbox build
 ```
 
 **5. Log in to Claude** inside the container (one-time setup)
@@ -185,7 +185,7 @@ claude-sandbox global mounts clear                             # remove all glob
 After pulling changes or updating tool versions:
 
 ```bash
-docker compose -f ~/.claude-sandbox/docker-compose.yml build
+make -C ~/.claude-sandbox build
 ```
 
 Named volumes are preserved across rebuilds.

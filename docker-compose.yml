@@ -1,4 +1,0 @@
-services:
-  claude-sandbox:
-    build: .
-    image: claude-sandbox
