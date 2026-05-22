@@ -261,13 +261,13 @@ function _sandbox_git_auth_wizard
     set -l project_name $argv[2]
 
     echo ""
-    echo "No git credentials configured for \"$project_path\"."
+    echo "No git credentials configured for this project. How would you like to authenticate?"
     echo ""
-    echo "  1. SSH deploy key  [Enter]"
-    echo "  2. PAT (Personal Access Token)"
+    echo "  1. SSH [Enter]"
+    echo "  2. Personal Access Token (PAT)"
     echo "  3. Skip"
     echo ""
-    read -P "Choice [1]: " choice
+    read -P "Choice [default=1]: " choice
     if test -z "$choice"
         set choice 1
     end
@@ -275,12 +275,12 @@ function _sandbox_git_auth_wizard
     switch $choice
         case 1
             echo ""
-            echo "  1. Generate a new deploy key"
+            echo "  1. Generate a new key"
             echo "  2. Use an existing key"
             echo ""
-            read -P "Choice [1]: " ssh_choice
+            read -P "Choice [default=2]: " ssh_choice
             if test -z "$ssh_choice"
-                set ssh_choice 1
+                set ssh_choice 2
             end
 
             set -l default_path $HOME/.ssh/id_ed25519_$project_name
