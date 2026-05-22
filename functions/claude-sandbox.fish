@@ -243,59 +243,116 @@ function _sandbox_copy_pubkey
 end
 
 
-function _sandbox_creds_wizard
-    # Usage: _sandbox_creds_wizard <project_path> <project_name>
+function _sandbox_git_auth_wizard
+    # Usage: _sandbox_git_auth_wizard <project_path> <project_name>
     set -l project_path $argv[1]
     set -l project_name $argv[2]
 
     echo ""
-    echo "No SSH credentials configured for \"$project_path\"."
+    echo "No git credentials configured for \"$project_path\"."
     echo ""
-    echo "  1. Generate a new deploy key"
-    echo "  2. Use an existing key"
-    echo "  3. Skip (no git credentials)"
+    echo "  1. SSH deploy key  [Enter]"
+    echo "  2. PAT (Personal Access Token)"
+    echo "  3. Skip"
     echo ""
-    read -P "Choice: " choice
+    read -P "Choice [1]: " choice
+    if test -z "$choice"
+        set choice 1
+    end
 
     switch $choice
         case 1
-            set -l default_path $HOME/.ssh/id_ed25519_$project_name
-            read -P "Key path [$default_path]: " key_path
-            if test -z "$key_path"
-                set key_path $default_path
-            else
-                set key_path (_sandbox_expand_vars $key_path)
+            echo ""
+            echo "  1. Generate a new deploy key"
+            echo "  2. Use an existing key"
+            echo ""
+            read -P "Choice [1]: " ssh_choice
+            if test -z "$ssh_choice"
+                set ssh_choice 1
             end
 
-            ssh-keygen -t ed25519 -f $key_path -C "$project_name deploy key" -N ""
-            or return 1
+            set -l default_path $HOME/.ssh/id_ed25519_$project_name
+            switch $ssh_choice
+                case 1
+                    read -P "Key path [$default_path]: " key_path
+                    if test -z "$key_path"
+                        set key_path $default_path
+                    else
+                        set key_path (_sandbox_expand_vars $key_path)
+                    end
 
-            echo ""
-            echo "Key generated at $key_path"
-            _sandbox_copy_pubkey "$key_path.pub"
-            echo ""
-            echo "GitHub : repo Settings -> Deploy keys -> Add deploy key  (enable \"Allow write access\" if needed)"
-            echo "GitLab : repo Settings -> Repository -> Deploy keys"
-            echo ""
-            read -P "Press Enter when done to launch the sandbox..." _dummy
+                    ssh-keygen -t ed25519 -f $key_path -C "$project_name deploy key" -N ""
+                    or return 1
 
-            _sandbox_config_write_creds_ssh $project_path $key_path
+                    echo ""
+                    echo "Key generated at $key_path"
+                    _sandbox_copy_pubkey "$key_path.pub"
+                    echo ""
+                    echo "GitHub : repo Settings -> Deploy keys -> Add deploy key  (enable \"Allow write access\" if needed)"
+                    echo "GitLab : repo Settings -> Repository -> Deploy keys"
+                    echo ""
+                    read -P "Press Enter when done to launch the sandbox..." _dummy
+
+                case 2
+                    read -P "SSH key path: " key_path
+                    set key_path (_sandbox_expand_vars $key_path)
+                    if not test -f $key_path
+                        echo "Error: key file not found: $key_path"
+                        return 1
+                    end
+
+                case '*'
+                    echo "Error: invalid choice '$ssh_choice'"
+                    return 1
+            end
+
+            _sandbox_config_write_git_auth_ssh $project_path $key_path
 
         case 2
-            read -P "SSH key path: " key_path
-            set key_path (_sandbox_expand_vars $key_path)
-            if not test -f $key_path
-                echo "Error: key file not found: $key_path"
+            read -P "Token file path: " token_path
+            set token_path (_sandbox_expand_vars $token_path)
+            if not test -f $token_path
+                echo "Error: file not found: $token_path"
                 return 1
             end
-            _sandbox_config_write_creds_ssh $project_path $key_path
+            _sandbox_config_write_git_auth_pat $project_path $token_path
 
         case 3
-            _sandbox_config_write_creds_none $project_path
+            _sandbox_config_write_git_auth_none $project_path
+            return 0
 
         case '*'
             echo "Error: invalid choice '$choice'"
             return 1
+    end
+
+    # Identity step (SSH and PAT only)
+    set -l default_name (git config --global user.name 2>/dev/null)
+    set -l default_email (git config --global user.email 2>/dev/null)
+
+    echo ""
+    echo "Git identity for this project:"
+
+    set -l name_prompt "  Name"
+    if test -n "$default_name"
+        set name_prompt "$name_prompt [$default_name]"
+    end
+    read -P "$name_prompt: " id_name
+    if test -z "$id_name"
+        set id_name $default_name
+    end
+
+    set -l email_prompt "  Email"
+    if test -n "$default_email"
+        set email_prompt "$email_prompt [$default_email]"
+    end
+    read -P "$email_prompt: " id_email
+    if test -z "$id_email"
+        set id_email $default_email
+    end
+
+    if test -n "$id_name"; or test -n "$id_email"
+        _sandbox_config_write_git_auth_identity $project_path $id_name $id_email
     end
 end
 
