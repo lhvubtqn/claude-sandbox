@@ -1,12 +1,26 @@
 global:
-  mounts:
-    - ~/.claude-sandbox/.gitconfig:/home/claude/.gitconfig:ro
-    - ~/.claude-sandbox/skills:/home/claude/.claude/skills:ro
-    - ~/.claude-sandbox/rules:/home/claude/.claude/rules:ro
+  container:
+    image: claude-sandbox
+    security_opt:
+      - seccomp=unconfined
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    volumes:
+      - claude-config:/home/claude/.claude
+      - cargo-registry:/home/claude/.cargo/registry
+      - cargo-git:/home/claude/.cargo/git
+      - rustup-downloads:/home/claude/.rustup/downloads
+      - npm-cache:/home/claude/.npm
+      - solana-config:/home/claude/.config/solana
+      - vscode-server:/home/claude/.vscode-server
+      - ${WORKDIR}/.gitconfig:/home/claude/.gitconfig:ro
+      - ${WORKDIR}/skills:/home/claude/.claude/skills:ro
+      - ${WORKDIR}/rules:/home/claude/.claude/rules:ro
 projects:
   /home/lhvubtqn/workdir/mattle-fun/godew-valley:
     credentials:
       type: ssh
       keyPath: /home/lhvubtqn/.ssh/id_ed25519_godew-valley
-    mounts:
-      - /home/lhvubtqn/.local/bin/godot_v4.6.2:/home/claude/.local/godot
+    container:
+      volumes:
+        - /home/lhvubtqn/.local/bin/godot_v4.6.2:/home/claude/.local/godot
