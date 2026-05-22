@@ -1,6 +1,6 @@
 # Tab completions for claude-sandbox
 
-set -l subcommands stop list creds mounts global
+set -l subcommands stop list git-auth mounts global
 
 # No file completion at top level
 complete -c claude-sandbox -f
@@ -17,7 +17,7 @@ complete -c claude-sandbox \
     -a list   -d 'List all sandbox containers'
 complete -c claude-sandbox \
     -n "not __fish_seen_subcommand_from $subcommands" \
-    -a creds  -d 'Manage per-project SSH credentials'
+    -a git-auth -d 'Manage per-project git auth'
 complete -c claude-sandbox \
     -n "not __fish_seen_subcommand_from $subcommands" \
     -a mounts -d 'Manage per-project volume entries'
@@ -38,22 +38,22 @@ complete -c claude-sandbox \
     -n "__fish_seen_subcommand_from list" \
     -l help -d 'Show usage'
 
-# creds actions
-set -l creds_actions set show clear list
+# git-auth actions
+set -l git_auth_actions set show clear list
 complete -c claude-sandbox \
-    -n "__fish_seen_subcommand_from creds; and not __fish_seen_subcommand_from $creds_actions" \
-    -a set   -d 'Configure SSH key'
+    -n "__fish_seen_subcommand_from git-auth; and not __fish_seen_subcommand_from $git_auth_actions" \
+    -a set   -d 'Configure git credentials (SSH or PAT)'
 complete -c claude-sandbox \
-    -n "__fish_seen_subcommand_from creds; and not __fish_seen_subcommand_from $creds_actions" \
-    -a show  -d 'Show current credential'
+    -n "__fish_seen_subcommand_from git-auth; and not __fish_seen_subcommand_from $git_auth_actions" \
+    -a show  -d 'Show current git auth'
 complete -c claude-sandbox \
-    -n "__fish_seen_subcommand_from creds; and not __fish_seen_subcommand_from $creds_actions" \
-    -a clear -d 'Remove saved credential'
+    -n "__fish_seen_subcommand_from git-auth; and not __fish_seen_subcommand_from $git_auth_actions" \
+    -a clear -d 'Remove saved git auth'
 complete -c claude-sandbox \
-    -n "__fish_seen_subcommand_from creds; and not __fish_seen_subcommand_from $creds_actions" \
-    -a list  -d 'List all project credentials'
+    -n "__fish_seen_subcommand_from git-auth; and not __fish_seen_subcommand_from $git_auth_actions" \
+    -a list  -d 'List all project git auth'
 complete -c claude-sandbox \
-    -n "__fish_seen_subcommand_from creds" \
+    -n "__fish_seen_subcommand_from git-auth" \
     -l help -d 'Show usage'
 
 # mounts actions (not under global)
