@@ -1,0 +1,95 @@
+# Tab completions for claude-sandbox
+
+set -l subcommands stop list creds mounts global
+
+# No file completion at top level
+complete -c claude-sandbox -f
+
+# Top-level: --help and subcommands (only when no subcommand seen yet)
+complete -c claude-sandbox \
+    -n "not __fish_seen_subcommand_from $subcommands" \
+    -l help -d 'Show usage and exit'
+complete -c claude-sandbox \
+    -n "not __fish_seen_subcommand_from $subcommands" \
+    -a stop   -d 'Stop this project'\''s container'
+complete -c claude-sandbox \
+    -n "not __fish_seen_subcommand_from $subcommands" \
+    -a list   -d 'List all sandbox containers'
+complete -c claude-sandbox \
+    -n "not __fish_seen_subcommand_from $subcommands" \
+    -a creds  -d 'Manage per-project SSH credentials'
+complete -c claude-sandbox \
+    -n "not __fish_seen_subcommand_from $subcommands" \
+    -a mounts -d 'Manage per-project volume entries'
+complete -c claude-sandbox \
+    -n "not __fish_seen_subcommand_from $subcommands" \
+    -a global -d 'Manage global configuration'
+
+# stop
+complete -c claude-sandbox \
+    -n "__fish_seen_subcommand_from stop" \
+    -l rm   -d 'Also remove the container after stopping'
+complete -c claude-sandbox \
+    -n "__fish_seen_subcommand_from stop" \
+    -l help -d 'Show usage'
+
+# list
+complete -c claude-sandbox \
+    -n "__fish_seen_subcommand_from list" \
+    -l help -d 'Show usage'
+
+# creds actions
+set -l creds_actions set show clear list
+complete -c claude-sandbox \
+    -n "__fish_seen_subcommand_from creds; and not __fish_seen_subcommand_from $creds_actions" \
+    -a set   -d 'Configure SSH key'
+complete -c claude-sandbox \
+    -n "__fish_seen_subcommand_from creds; and not __fish_seen_subcommand_from $creds_actions" \
+    -a show  -d 'Show current credential'
+complete -c claude-sandbox \
+    -n "__fish_seen_subcommand_from creds; and not __fish_seen_subcommand_from $creds_actions" \
+    -a clear -d 'Remove saved credential'
+complete -c claude-sandbox \
+    -n "__fish_seen_subcommand_from creds; and not __fish_seen_subcommand_from $creds_actions" \
+    -a list  -d 'List all project credentials'
+complete -c claude-sandbox \
+    -n "__fish_seen_subcommand_from creds" \
+    -l help -d 'Show usage'
+
+# mounts actions (not under global)
+set -l mount_actions add remove list clear
+complete -c claude-sandbox \
+    -n "__fish_seen_subcommand_from mounts; and not __fish_seen_subcommand_from global; and not __fish_seen_subcommand_from $mount_actions" \
+    -a add    -d 'Add a volume entry'
+complete -c claude-sandbox \
+    -n "__fish_seen_subcommand_from mounts; and not __fish_seen_subcommand_from global; and not __fish_seen_subcommand_from $mount_actions" \
+    -a remove -d 'Remove a volume entry'
+complete -c claude-sandbox \
+    -n "__fish_seen_subcommand_from mounts; and not __fish_seen_subcommand_from global; and not __fish_seen_subcommand_from $mount_actions" \
+    -a list   -d 'List volume entries'
+complete -c claude-sandbox \
+    -n "__fish_seen_subcommand_from mounts; and not __fish_seen_subcommand_from global; and not __fish_seen_subcommand_from $mount_actions" \
+    -a clear  -d 'Clear all volume entries'
+complete -c claude-sandbox \
+    -n "__fish_seen_subcommand_from mounts; and not __fish_seen_subcommand_from global" \
+    -l help -d 'Show usage'
+
+# global → mounts → actions
+complete -c claude-sandbox \
+    -n "__fish_seen_subcommand_from global; and not __fish_seen_subcommand_from mounts" \
+    -a mounts -d 'Manage global volume entries'
+complete -c claude-sandbox \
+    -n "__fish_seen_subcommand_from global; and __fish_seen_subcommand_from mounts; and not __fish_seen_subcommand_from $mount_actions" \
+    -a add    -d 'Add a global volume entry'
+complete -c claude-sandbox \
+    -n "__fish_seen_subcommand_from global; and __fish_seen_subcommand_from mounts; and not __fish_seen_subcommand_from $mount_actions" \
+    -a remove -d 'Remove a global volume entry'
+complete -c claude-sandbox \
+    -n "__fish_seen_subcommand_from global; and __fish_seen_subcommand_from mounts; and not __fish_seen_subcommand_from $mount_actions" \
+    -a list   -d 'List global volume entries'
+complete -c claude-sandbox \
+    -n "__fish_seen_subcommand_from global; and __fish_seen_subcommand_from mounts; and not __fish_seen_subcommand_from $mount_actions" \
+    -a clear  -d 'Clear all global volume entries'
+complete -c claude-sandbox \
+    -n "__fish_seen_subcommand_from global" \
+    -l help -d 'Show usage'
