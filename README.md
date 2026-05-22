@@ -44,7 +44,7 @@ mkdir -p ~/.config/fish/functions
 cp ~/.claude-sandbox/functions/claude-sandbox.fish ~/.config/fish/functions/
 ```
 
-On first launch, `configurations.yml` is auto-initialized with default global mounts (`.gitconfig`, `skills/`, `rules/`).
+`configurations.yml` ships with defaults in the repo. Existing installs with an older flat-schema file are auto-migrated on first launch.
 
 **4. Build the image** (takes 10–20 minutes on first run)
 
@@ -100,7 +100,7 @@ claude --dangerously-skip-permissions
 | `solana-config` | `/root/.config/solana` | Solana keypairs and config |
 | `vscode-server` | `/home/claude/.vscode-server` | VS Code Server (survives restarts) |
 | `claude-config` | `/home/claude/.claude` | Claude Code auth, config, and session; `.claude.json` lives here and is symlinked to `/home/claude/.claude.json` by the entrypoint |
-| `.gitconfig` (bind, ro) | `/home/claude/.gitconfig` | Git identity — repo-local copy, edit independently from host |
+| `.gitconfig` (bind, ro) | `/home/claude/.gitconfig` | Git identity — default global mount, configurable via `claude-sandbox global mounts` |
 | `~/.claude-sandbox/skills/` (bind, ro) | `/home/claude/.claude/skills/` | Custom Claude Code skills, version-controlled in this repo |
 | `~/.claude-sandbox/rules/` (bind, ro) | `/home/claude/.claude/rules/` | Global Claude Code rules, version-controlled in this repo |
 | SSH deploy key (bind, ro) | `/home/claude/.ssh/deploy_key` | Per-project SSH deploy key; included in the generated override file when configured |
