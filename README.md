@@ -18,23 +18,10 @@ A Docker sandbox for running [Claude Code](https://claude.ai/code) with `--dange
 git clone https://github.com/lhvubtqn/claude-sandbox
 ```
 
-**2. Install the fish function**
+**2. Install** (builds the Docker image on first run — takes 10–20 minutes)
 
 ```bash
 cd claude-sandbox && make install
-```
-
-**3. Build the image** (10–20 minutes on first run)
-
-```bash
-make build
-```
-
-**4. Log in to Claude** (one-time)
-
-```bash
-claude-sandbox  # open any project, then in the VS Code terminal:
-claude
 ```
 
 ## Use it

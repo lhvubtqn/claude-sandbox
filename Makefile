@@ -13,3 +13,4 @@ install:
 	ln -sf $(WORKDIR)/functions/claude-sandbox.fish $(HOME)/.config/fish/functions/claude-sandbox.fish
 	ln -sf $(WORKDIR)/completions/claude-sandbox.fish $(HOME)/.config/fish/completions/claude-sandbox.fish
 	rm -f $(HOME)/.config/fish/functions/_sandbox_repo_dir.fish
+	docker image inspect claude-sandbox > /dev/null 2>&1 || docker build -t claude-sandbox $(WORKDIR)
