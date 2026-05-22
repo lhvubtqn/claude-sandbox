@@ -37,7 +37,7 @@ Clone it anywhere — the install step sets up the data directory separately.
 cd claude-sandbox && make install
 ```
 
-This copies the fish function and completions, and writes a small generated helper that records the repo location so `configurations.yml`, `skills/`, and `rules/` are always resolved from the repo directory.
+This symlinks the fish function and completions into `~/.config/fish/`. The function resolves the repo location at runtime via the symlink, so `configurations.yml`, `skills/`, and `rules/` are always read directly from the repo.
 
 **3. Build the image** (takes 10–20 minutes on first run)
 

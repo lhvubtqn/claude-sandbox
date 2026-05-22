@@ -1,5 +1,6 @@
 function _sandbox_config_file
-    echo (_sandbox_repo_dir)/configurations.yml
+    set -l repo_dir (dirname (dirname (realpath (status filename))))
+    echo $repo_dir/configurations.yml
 end
 
 function _sandbox_config_read_creds_type
