@@ -40,9 +40,7 @@ This creates a sandbox-local git config that lives in the repo and is mounted in
 **3. Install the fish function and completions**
 
 ```bash
-mkdir -p ~/.config/fish/functions ~/.config/fish/completions
-cp ~/.claude-sandbox/functions/claude-sandbox.fish ~/.config/fish/functions/
-cp ~/.claude-sandbox/completions/claude-sandbox.fish ~/.config/fish/completions/
+make -C ~/.claude-sandbox install
 ```
 
 `configurations.yml` ships with defaults in the repo. Existing installs with an older flat-schema file are auto-migrated on first launch.
