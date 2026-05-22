@@ -118,9 +118,20 @@ function _sandbox_global_mounts_clear
     and mv $tmp $f
 end
 
-function _sandbox_expand_path
-    # Expand leading ~ to $HOME in a path read from user input
-    string replace -r '^~/' $HOME/ $argv[1]
+function _sandbox_expand_vars
+    # Expands ${WORKDIR}, ${HOME}, and leading ~ in a path string.
+    set -l workdir (dirname (_sandbox_config_file))
+    set -l result $argv[1]
+    set result (string replace -- '${WORKDIR}' $workdir $result)
+    set result (string replace -- '${HOME}' $HOME $result)
+    set result (string replace -r '^~/' $HOME/ $result)
+    echo $result
+end
+
+function _sandbox_container_name
+    # Usage: _sandbox_container_name <absolute_project_path>
+    set -l hash (printf '%s' $argv[1] | sha256sum | cut -c1-8)
+    echo "claude-sandbox-$hash"
 end
 
 function _sandbox_copy_pubkey
@@ -217,7 +228,7 @@ function _sandbox_creds_wizard
             if test -z "$key_path"
                 set key_path $default_path
             else
-                set key_path (_sandbox_expand_path $key_path)
+                set key_path (_sandbox_expand_vars $key_path)
             end
 
             ssh-keygen -t ed25519 -f $key_path -C "$project_name deploy key" -N ""
@@ -236,7 +247,7 @@ function _sandbox_creds_wizard
 
         case 2
             read -P "SSH key path: " key_path
-            set key_path (_sandbox_expand_path $key_path)
+            set key_path (_sandbox_expand_vars $key_path)
             if not test -f $key_path
                 echo "Error: key file not found: $key_path"
                 return 1
@@ -309,7 +320,7 @@ function claude-sandbox
         switch $action
             case set
                 if test (count $argv) -ge 3
-                    set -l key_path (_sandbox_expand_path $argv[3])
+                    set -l key_path (_sandbox_expand_vars $argv[3])
                     if not test -f $key_path
                         echo "Error: key file not found: $key_path"
                         return 1
