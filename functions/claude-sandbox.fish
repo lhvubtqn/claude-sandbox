@@ -293,6 +293,46 @@ function claude-sandbox
         return
     end
 
+    # --- stop subcommand ---
+    if test (count $argv) -gt 0; and test $argv[1] = stop
+        if contains -- --help $argv
+            echo "Usage: claude-sandbox stop [--rm]"
+            echo ""
+            echo "  Stops the container for the current project."
+            echo "  --rm    Also remove the container after stopping."
+            return 0
+        end
+        set -l remove false
+        if contains -- --rm $argv
+            set remove true
+        end
+        set -l container_name (_sandbox_container_name $PROJECT_PATH)
+        if not docker inspect $container_name > /dev/null 2>&1
+            echo "No container found for $PROJECT_PATH"
+            return 1
+        end
+        docker stop $container_name
+        or return 1
+        if test "$remove" = true
+            docker rm $container_name
+        end
+        return
+    end
+
+    # --- list subcommand ---
+    if test (count $argv) -gt 0; and test $argv[1] = list
+        if contains -- --help $argv
+            echo "Usage: claude-sandbox list"
+            echo ""
+            echo "  Lists all claude-sandbox containers and their project paths."
+            return 0
+        end
+        docker ps -a \
+            --filter "label=claude-sandbox.project" \
+            --format "table {{.Names}}\t{{.Label \"claude-sandbox.project\"}}\t{{.Status}}"
+        return
+    end
+
     # --- creds subcommand ---
     if test (count $argv) -gt 0; and test $argv[1] = creds
         set -l action $argv[2]
