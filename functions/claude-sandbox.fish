@@ -46,41 +46,36 @@ function _sandbox_config_delete
 end
 
 function _sandbox_mounts_list
-    # Usage: _sandbox_mounts_list <project_path>
-    # Prints each mount spec on its own line; prints nothing if no mounts configured
     set -l f (_sandbox_config_file)
     test -f $f; or return
-    yq -r --arg p $argv[1] '.projects[$p].mounts // [] | .[]' $f 2>/dev/null
+    yq -r --arg p $argv[1] '.projects[$p].container.volumes // [] | .[]' $f 2>/dev/null
 end
 
 function _sandbox_mounts_add
-    # Usage: _sandbox_mounts_add <project_path> <mount_spec>
     set -l f (_sandbox_config_file)
     test -f $f; or echo '{}' > $f
     set -l tmp (mktemp)
     yq -y --arg p $argv[1] --arg m $argv[2] \
-        '.projects[$p].mounts = ((.projects[$p].mounts // []) + [$m])' $f > $tmp
+        '.projects[$p].container.volumes = ((.projects[$p].container.volumes // []) + [$m])' $f > $tmp
     and mv $tmp $f
 end
 
 function _sandbox_mounts_remove
-    # Usage: _sandbox_mounts_remove <project_path> <mount_spec>
     set -l f (_sandbox_config_file)
     test -f $f; or return
-    set -l count (yq -r --arg p $argv[1] '.projects[$p].mounts | length' $f 2>/dev/null)
+    set -l count (yq -r --arg p $argv[1] '.projects[$p].container.volumes | length' $f 2>/dev/null)
     test "$count" -gt 0 2>/dev/null; or return
     set -l tmp (mktemp)
     yq -y --arg p $argv[1] --arg m $argv[2] \
-        '.projects[$p].mounts = [(.projects[$p].mounts // [])[] | select(. != $m)]' $f > $tmp
+        '.projects[$p].container.volumes = [(.projects[$p].container.volumes // [])[] | select(. != $m)]' $f > $tmp
     and mv $tmp $f
 end
 
 function _sandbox_mounts_clear
-    # Usage: _sandbox_mounts_clear <project_path>
     set -l f (_sandbox_config_file)
     test -f $f; or return
     set -l tmp (mktemp)
-    yq -y --arg p $argv[1] 'del(.projects[$p].mounts)' $f > $tmp
+    yq -y --arg p $argv[1] 'del(.projects[$p].container.volumes)' $f > $tmp
     and mv $tmp $f
 end
 
