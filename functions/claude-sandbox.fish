@@ -6,14 +6,14 @@ function _sandbox_config_read_creds_type
     # Returns "ssh", "none", or empty string if no entry exists
     set -l f (_sandbox_config_file)
     test -f $f; or begin; echo ""; return; end
-    yq -r --arg p $argv[1] '.[$p].credentials.type // empty' $f 2>/dev/null
+    yq -r --arg p $argv[1] '.projects[$p].credentials.type // empty' $f 2>/dev/null
 end
 
 function _sandbox_config_read_creds_key
     # Returns keyPath or empty string
     set -l f (_sandbox_config_file)
     test -f $f; or begin; echo ""; return; end
-    yq -r --arg p $argv[1] '.[$p].credentials.keyPath // empty' $f 2>/dev/null
+    yq -r --arg p $argv[1] '.projects[$p].credentials.keyPath // empty' $f 2>/dev/null
 end
 
 function _sandbox_config_write_creds_ssh
@@ -22,7 +22,7 @@ function _sandbox_config_write_creds_ssh
     test -f $f; or echo '{}' > $f
     set -l tmp (mktemp)
     yq -y --arg p $argv[1] --arg k $argv[2] \
-        '.[$p].credentials = {"type": "ssh", "keyPath": $k}' $f > $tmp
+        '.projects[$p].credentials = {"type": "ssh", "keyPath": $k}' $f > $tmp
     and mv $tmp $f
 end
 
@@ -32,7 +32,7 @@ function _sandbox_config_write_creds_none
     test -f $f; or echo '{}' > $f
     set -l tmp (mktemp)
     yq -y --arg p $argv[1] \
-        '.[$p].credentials = {"type": "none"}' $f > $tmp
+        '.projects[$p].credentials = {"type": "none"}' $f > $tmp
     and mv $tmp $f
 end
 
@@ -41,7 +41,7 @@ function _sandbox_config_delete
     set -l f (_sandbox_config_file)
     test -f $f; or return
     set -l tmp (mktemp)
-    yq -y --arg p $argv[1] 'del(.[$p].credentials)' $f > $tmp
+    yq -y --arg p $argv[1] 'del(.projects[$p].credentials)' $f > $tmp
     and mv $tmp $f
 end
 
@@ -50,7 +50,7 @@ function _sandbox_mounts_list
     # Prints each mount spec on its own line; prints nothing if no mounts configured
     set -l f (_sandbox_config_file)
     test -f $f; or return
-    yq -r --arg p $argv[1] '.[$p].mounts // [] | .[]' $f 2>/dev/null
+    yq -r --arg p $argv[1] '.projects[$p].mounts // [] | .[]' $f 2>/dev/null
 end
 
 function _sandbox_mounts_add
@@ -59,7 +59,7 @@ function _sandbox_mounts_add
     test -f $f; or echo '{}' > $f
     set -l tmp (mktemp)
     yq -y --arg p $argv[1] --arg m $argv[2] \
-        '.[$p].mounts = ((.[$p].mounts // []) + [$m])' $f > $tmp
+        '.projects[$p].mounts = ((.projects[$p].mounts // []) + [$m])' $f > $tmp
     and mv $tmp $f
 end
 
@@ -67,11 +67,11 @@ function _sandbox_mounts_remove
     # Usage: _sandbox_mounts_remove <project_path> <mount_spec>
     set -l f (_sandbox_config_file)
     test -f $f; or return
-    set -l count (yq -r --arg p $argv[1] '.[$p].mounts | length' $f 2>/dev/null)
+    set -l count (yq -r --arg p $argv[1] '.projects[$p].mounts | length' $f 2>/dev/null)
     test "$count" -gt 0 2>/dev/null; or return
     set -l tmp (mktemp)
     yq -y --arg p $argv[1] --arg m $argv[2] \
-        '.[$p].mounts = [(.[$p].mounts // [])[] | select(. != $m)]' $f > $tmp
+        '.projects[$p].mounts = [(.projects[$p].mounts // [])[] | select(. != $m)]' $f > $tmp
     and mv $tmp $f
 end
 
@@ -80,7 +80,7 @@ function _sandbox_mounts_clear
     set -l f (_sandbox_config_file)
     test -f $f; or return
     set -l tmp (mktemp)
-    yq -y --arg p $argv[1] 'del(.[$p].mounts)' $f > $tmp
+    yq -y --arg p $argv[1] 'del(.projects[$p].mounts)' $f > $tmp
     and mv $tmp $f
 end
 
@@ -112,6 +112,23 @@ function _sandbox_migrate_from_json
         | yq -y . > $tmp
     and mv $tmp $new_f
     and rm $old_f
+    and echo "Migration complete."
+end
+
+function _sandbox_migrate_to_nested
+    # Migrate flat schema (project paths as top-level keys) to global/projects schema.
+    set -l f (_sandbox_config_file)
+    test -f $f; or return
+    set -l has_global (yq -r 'if .global != null then "yes" else "no" end' $f 2>/dev/null)
+    set -l has_projects (yq -r 'if .projects != null then "yes" else "no" end' $f 2>/dev/null)
+    if test "$has_global" = yes; or test "$has_projects" = yes
+        return
+    end
+    echo "Migrating configurations.yml to global/projects schema..."
+    set -l tmp (mktemp)
+    yq -y '{global: {mounts: ["~/.claude-sandbox/.gitconfig:/home/claude/.gitconfig:ro"]}, projects: .}' \
+        $f > $tmp
+    and mv $tmp $f
     and echo "Migration complete."
 end
 
@@ -240,7 +257,7 @@ function claude-sandbox
                     echo "No credentials configured."
                     return
                 end
-                yq -r 'to_entries[] | select(.value.credentials != null) | "\(.key)\n  type: \(.value.credentials.type)" + (if .value.credentials.keyPath then "\n  keyPath: \(.value.credentials.keyPath)" else "" end)' $f
+                yq -r '.projects | to_entries[] | select(.value.credentials != null) | "\(.key)\n  type: \(.value.credentials.type)" + (if .value.credentials.keyPath then "\n  keyPath: \(.value.credentials.keyPath)" else "" end)' $f
             case '*'
                 echo "Usage: claude-sandbox creds {set [key-path]|show|clear|list}"
                 return 1
@@ -293,6 +310,8 @@ function claude-sandbox
 
     # Auto-migrate from legacy project-creds.json
     _sandbox_migrate_from_json
+    # Migrate flat schema to global/projects schema
+    _sandbox_migrate_to_nested
 
     # Resolve credentials for this project
     set -l creds_type (_sandbox_config_read_creds_type $PROJECT_PATH)
