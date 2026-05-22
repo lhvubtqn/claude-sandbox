@@ -264,7 +264,7 @@ function claude-sandbox
 
     # --- global subcommand ---
     if test (count $argv) -gt 0; and test $argv[1] = global
-        if test (count $argv) -lt 3; or test $argv[2] != mounts
+        if test (count $argv) -lt 3; or test "$argv[2]" != mounts
             echo "Usage: claude-sandbox global mounts {add <spec>|remove <spec>|list|clear}"
             return 1
         end
