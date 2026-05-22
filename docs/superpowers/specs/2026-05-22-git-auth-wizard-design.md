@@ -66,6 +66,9 @@ projects:
       identity:
         name: Vincent Le
         email: dat@sandbox-software.dev
+  /home/you/other-project:
+    git_auth:
+      type: none         # path and identity are absent
 ```
 
 `prefer_ssh` rewrites `https://github.com/` → `git@github.com:` inside the container only.
@@ -141,6 +144,8 @@ All `git config --global` calls write to `/home/claude/.gitconfig` (no bind moun
 ### `creds` subcommand → `git-auth`
 
 `show` output updated to include identity and PAT type. All internal references to `creds` renamed to `git-auth`.
+
+`git-auth set` always runs the wizard (the old `creds set [key-path]` shortcut that set SSH directly is removed — type is now required context).
 
 ### Launch flow update
 
