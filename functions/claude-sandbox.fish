@@ -128,6 +128,57 @@ function _sandbox_container_name
     echo "claude-sandbox-$hash"
 end
 
+function _sandbox_docker_run
+    # Usage: _sandbox_docker_run <container_name> <project_path> <project_name>
+    set -l container_name $argv[1]
+    set -l project_path $argv[2]
+    set -l project_name $argv[3]
+    set -l f (_sandbox_config_file)
+
+    # Resolve image (project overrides global)
+    set -l image (yq -r --arg p $project_path \
+        '(.projects[$p].container.image // .global.container.image // "claude-sandbox")' $f)
+
+    set -l args -d \
+        --name $container_name \
+        --hostname claude-sandbox \
+        --label "claude-sandbox.project=$project_path"
+
+    # security_opt: global then project
+    for opt in (yq -r --arg p $project_path \
+        '((.global.container.security_opt // []) + (.projects[$p].container.security_opt // [])) | .[]' $f 2>/dev/null)
+        set args $args --security-opt $opt
+    end
+
+    # extra_hosts: global then project
+    for host in (yq -r --arg p $project_path \
+        '((.global.container.extra_hosts // []) + (.projects[$p].container.extra_hosts // [])) | .[]' $f 2>/dev/null)
+        set args $args --add-host $host
+    end
+
+    # volumes: global then project, with variable expansion
+    for vol in (yq -r --arg p $project_path \
+        '((.global.container.volumes // []) + (.projects[$p].container.volumes // [])) | .[]' $f 2>/dev/null)
+        set args $args -v (_sandbox_expand_vars $vol)
+    end
+
+    # SSH deploy key (credentials-managed, not in volumes list)
+    set -l creds_type (_sandbox_config_read_creds_type $project_path)
+    if test "$creds_type" = ssh
+        set -l key_path (_sandbox_expand_vars (_sandbox_config_read_creds_key $project_path))
+        set args $args -v "$key_path:/home/claude/.ssh/deploy_key:ro"
+    end
+
+    # Project workspace bind mount
+    set args $args -v "$project_path:/workspace/$project_name"
+
+    set args $args \
+        --workdir /workspace/$project_name \
+        --entrypoint /entrypoint.sh
+
+    docker run $args $image sleep infinity
+end
+
 function _sandbox_copy_pubkey
     # Usage: _sandbox_copy_pubkey <pubkey_file_path>
     if uname -r | grep -qi microsoft
