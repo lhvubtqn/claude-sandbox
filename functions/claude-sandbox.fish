@@ -311,10 +311,16 @@ function claude-sandbox
             echo "No container found for $PROJECT_PATH"
             return 1
         end
-        docker stop $container_name
-        or return 1
+        set -l stop_status (docker inspect --format '{{.State.Status}}' $container_name 2>/dev/null)
+        if test "$stop_status" = running; or test "$stop_status" = paused; or test "$stop_status" = restarting
+            docker stop $container_name
+            or return 1
+        else
+            echo "Container is already stopped."
+        end
         if test "$remove" = true
             docker rm $container_name
+            or return 1
         end
         return
     end
@@ -450,6 +456,12 @@ function claude-sandbox
                 echo "Error: Failed to start container."
                 return 1
             end
+        case restarting
+            echo "Container is restarting, please wait and retry."
+            return 1
+        case removing dead
+            echo "Container is being removed or dead; run 'claude-sandbox stop --rm' and retry."
+            return 1
         case '*'
             echo "Creating new sandbox for $PROJECT_NAME..."
             _sandbox_docker_run $container_name $PROJECT_PATH $PROJECT_NAME
