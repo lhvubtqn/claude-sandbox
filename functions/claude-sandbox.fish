@@ -190,67 +190,6 @@ function _sandbox_copy_pubkey
     end
 end
 
-function _sandbox_migrate_from_json
-    # Auto-migrate project-creds.json -> configurations.yml on first run after update
-    set -l old_f $HOME/.claude-sandbox/project-creds.json
-    set -l new_f (_sandbox_config_file)
-    test -f $old_f; or return
-    test -f $new_f; and return
-    echo "Migrating project-creds.json to configurations.yml..."
-    set -l tmp (mktemp)
-    jq 'to_entries | map({key: .key, value: {credentials: .value}}) | from_entries' $old_f \
-        | yq -y . > $tmp
-    and mv $tmp $new_f
-    and rm $old_f
-    and echo "Migration complete."
-end
-
-function _sandbox_migrate_to_nested
-    # Migrate flat schema (project paths as top-level keys) to global/projects schema.
-    set -l f (_sandbox_config_file)
-    test -f $f; or return
-    set -l has_global (yq -r 'if .global != null then "yes" else "no" end' $f 2>/dev/null)
-    set -l has_projects (yq -r 'if .projects != null then "yes" else "no" end' $f 2>/dev/null)
-    if test "$has_global" = yes; or test "$has_projects" = yes
-        return
-    end
-    echo "Migrating configurations.yml to global/projects schema..."
-    set -l tmp (mktemp)
-    yq -y '{global: {mounts: ["~/.claude-sandbox/.gitconfig:/home/claude/.gitconfig:ro", "~/.claude-sandbox/skills:/home/claude/.claude/skills:ro", "~/.claude-sandbox/rules:/home/claude/.claude/rules:ro"]}, projects: .}' \
-        $f > $tmp
-    and mv $tmp $f
-    and echo "Migration complete."
-end
-
-function _sandbox_generate_override
-    # Usage: _sandbox_generate_override <project_path> <project_name>
-    set -l project_path $argv[1]
-    set -l project_name $argv[2]
-    set -l out $HOME/.claude-sandbox/docker-compose.override.yml
-
-    set -l volumes \
-        "      - $project_path:/workspace/$project_name"
-
-    for m in (_sandbox_global_mounts_list)
-        set volumes $volumes "      - "(_sandbox_expand_path $m)
-    end
-
-    set -l creds_type (_sandbox_config_read_creds_type $project_path)
-    if test "$creds_type" = ssh
-        set -l key_path (_sandbox_config_read_creds_key $project_path)
-        set volumes $volumes "      - $key_path:/home/claude/.ssh/deploy_key:ro"
-    end
-
-    for m in (_sandbox_mounts_list $project_path)
-        set volumes $volumes "      - $m"
-    end
-
-    printf 'services:\n  claude-sandbox:\n    working_dir: /workspace/%s\n    volumes:\n' \
-        $project_name > $out
-    for vol in $volumes
-        printf '%s\n' $vol >> $out
-    end
-end
 
 function _sandbox_creds_wizard
     # Usage: _sandbox_creds_wizard <project_path> <project_name>
@@ -312,11 +251,6 @@ function claude-sandbox
     set -l PROJECT_PATH (pwd)
     set -l PROJECT_NAME (basename $PROJECT_PATH)
     set -l SANDBOX_DIR $HOME/.claude-sandbox
-
-    # Auto-migrate from legacy project-creds.json
-    _sandbox_migrate_from_json
-    # Migrate flat schema to global/projects schema
-    _sandbox_migrate_to_nested
 
     # --- global subcommand ---
     if test (count $argv) -gt 0; and test $argv[1] = global
@@ -455,7 +389,7 @@ function claude-sandbox
 
     # Verify SSH key exists if configured
     if test "$creds_type" = ssh
-        set -l key_path (_sandbox_config_read_creds_key $PROJECT_PATH)
+        set -l key_path (_sandbox_expand_vars (_sandbox_config_read_creds_key $PROJECT_PATH))
         if not test -f $key_path
             echo "Error: SSH key not found: $key_path"
             echo "Run 'claude-sandbox creds set' to reconfigure."
@@ -463,18 +397,29 @@ function claude-sandbox
         end
     end
 
-    echo "Starting sandbox for $PROJECT_NAME..."
+    set -l container_name (_sandbox_container_name $PROJECT_PATH)
+    set -l container_status (docker inspect --format '{{.State.Status}}' $container_name 2>/dev/null)
 
-    # Generate docker-compose.override.yml for this project
-    _sandbox_generate_override $PROJECT_PATH $PROJECT_NAME
-
-    if not docker compose -f $SANDBOX_DIR/docker-compose.yml -f $SANDBOX_DIR/docker-compose.override.yml up -d --force-recreate
-        echo "Error: Failed to start the sandbox container."
-        return 1
+    switch $container_status
+        case running
+            echo "Attaching to running sandbox for $PROJECT_NAME..."
+        case exited created paused
+            echo "Starting sandbox for $PROJECT_NAME..."
+            docker start $container_name
+            or begin
+                echo "Error: Failed to start container."
+                return 1
+            end
+        case '*'
+            echo "Creating new sandbox for $PROJECT_NAME..."
+            _sandbox_docker_run $container_name $PROJECT_PATH $PROJECT_NAME
+            or begin
+                echo "Error: Failed to create container."
+                return 1
+            end
     end
 
-    set container_json "{\"containerName\":\"/claude-sandbox\"}"
-    set encoded (printf '%s' $container_json | xxd -p | tr -d '\n')
-
+    set -l container_json "{\"containerName\":\"/$container_name\"}"
+    set -l encoded (printf '%s' $container_json | xxd -p | tr -d '\n')
     code --folder-uri "vscode-remote://attached-container+$encoded/workspace/$PROJECT_NAME"
 end
