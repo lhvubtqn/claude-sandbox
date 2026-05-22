@@ -26,32 +26,26 @@ A Docker sandbox for running [Claude Code](https://claude.ai/code) with `--dange
 **1. Clone the repo**
 
 ```bash
-git clone https://github.com/lhvubtqn/claude-sandbox ~/.claude-sandbox
+git clone https://github.com/lhvubtqn/claude-sandbox
 ```
 
-**2. Copy your git identity into the sandbox**
+Clone it anywhere — the install step sets up the data directory separately.
+
+**2. Install the fish function and completions**
 
 ```bash
-cp ~/.gitconfig ~/.claude-sandbox/.gitconfig
+cd claude-sandbox && make install
 ```
 
-This creates a sandbox-local git config that lives in the repo and is mounted into the container. Edit it independently from your host `~/.gitconfig` if needed.
+This copies the fish function and completions, creates `~/.claude-sandbox/` as the data directory (with a default `configurations.yml` if none exists), and symlinks `skills/` and `rules/` from the repo into it.
 
-**3. Install the fish function and completions**
+**3. Build the image** (takes 10–20 minutes on first run)
 
 ```bash
-make -C ~/.claude-sandbox install
+make build
 ```
 
-`configurations.yml` ships with defaults in the repo. Existing installs with an older flat-schema file are auto-migrated on first launch.
-
-**4. Build the image** (takes 10–20 minutes on first run)
-
-```bash
-make -C ~/.claude-sandbox build
-```
-
-**5. Log in to Claude** inside the container (one-time setup)
+**4. Log in to Claude** inside the container (one-time setup)
 
 ```bash
 claude-sandbox  # from any project folder
@@ -114,9 +108,9 @@ claude-sandbox list        # list all sandbox containers with status
 | `solana-config` | `/root/.config/solana` | Solana keypairs and config |
 | `vscode-server` | `/home/claude/.vscode-server` | VS Code Server (survives restarts) |
 | `claude-config` | `/home/claude/.claude` | Claude Code auth, config, and session; `.claude.json` lives here and is symlinked to `/home/claude/.claude.json` by the entrypoint |
-| `.gitconfig` (bind, ro) | `/home/claude/.gitconfig` | Git identity — default global mount, configurable via `claude-sandbox global mounts` |
-| `~/.claude-sandbox/skills/` (bind, ro) | `/home/claude/.claude/skills/` | Custom Claude Code skills, version-controlled in this repo |
-| `~/.claude-sandbox/rules/` (bind, ro) | `/home/claude/.claude/rules/` | Global Claude Code rules, version-controlled in this repo |
+| `~/.gitconfig` (bind, ro) | `/home/claude/.gitconfig` | Git identity from the host |
+| `~/.claude-sandbox/skills/` (bind, ro) | `/home/claude/.claude/skills/` | Custom Claude Code skills, symlinked from the repo by `make install` |
+| `~/.claude-sandbox/rules/` (bind, ro) | `/home/claude/.claude/rules/` | Global Claude Code rules, symlinked from the repo by `make install` |
 | SSH deploy key (bind, ro) | `/home/claude/.ssh/deploy_key` | Per-project SSH deploy key; included in the generated override file when configured |
 | `$PROJECT_PATH` (bind) | `/workspace/$PROJECT_NAME` | Your project files |
 
@@ -134,7 +128,7 @@ No SSH credentials configured for "/home/you/your-project".
 Choice: _
 ```
 
-Option 1 runs `ssh-keygen`, copies the public key to your clipboard, and walks you through adding it as a deploy key in GitHub or GitLab before launching. Options 2 and 3 save immediately. Your choice is remembered per project path in `~/.claude-sandbox/configurations.yml`.
+Option 1 runs `ssh-keygen`, copies the public key to your clipboard, and walks you through adding it as a deploy key in GitHub or GitLab before launching. Options 2 and 3 save immediately. Your choice is remembered per project path in `configurations.yml` (at `~/.claude-sandbox/configurations.yml`).
 
 Manage credentials with subcommands (run from the project directory):
 
@@ -158,18 +152,20 @@ Mount specs use Docker bind-mount syntax: `<host-path>:<container-path>[:<option
 
 ## Global workspace
 
-Always-on volume entries (applied to every container regardless of project) are listed in `configurations.yml` under `global.container.volumes`. The defaults, initialized on first launch, are:
+Always-on volume entries (applied to every container regardless of project) are listed in `configurations.yml` under `global.container.volumes`. The defaults are:
 
 ```yaml
 global:
   container:
     volumes:
-      - ${WORKDIR}/.gitconfig:/home/claude/.gitconfig:ro
+      - ~/.gitconfig:/home/claude/.gitconfig:ro
       - ${WORKDIR}/skills:/home/claude/.claude/skills:ro
       - ${WORKDIR}/rules:/home/claude/.claude/rules:ro
 ```
 
-Add skills to `~/.claude-sandbox/skills/` and rules to `~/.claude-sandbox/rules/` — they are committed to this repo and mounted read-only into every container.
+`${WORKDIR}` expands to `~/.claude-sandbox/` at runtime. `make install` symlinks `skills/` and `rules/` from the repo there, so edits in the repo are reflected immediately without reinstalling.
+
+Add skills to the repo's `skills/` directory and rules to `rules/` — they are mounted read-only into every container.
 
 Manage global mounts with subcommands (run from any directory):
 
@@ -182,10 +178,10 @@ claude-sandbox global mounts clear                             # remove all glob
 
 ## Rebuilding
 
-After pulling changes or updating tool versions:
+After pulling changes or updating tool versions, run from the repo directory:
 
 ```bash
-make -C ~/.claude-sandbox build
+make build
 ```
 
 Named volumes are preserved across rebuilds.
