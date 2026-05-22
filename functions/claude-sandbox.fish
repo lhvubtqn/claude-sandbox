@@ -222,6 +222,11 @@ function claude-sandbox
     set -l PROJECT_NAME (basename $PROJECT_PATH)
     set -l SANDBOX_DIR $HOME/.claude-sandbox
 
+    # Auto-migrate from legacy project-creds.json
+    _sandbox_migrate_from_json
+    # Migrate flat schema to global/projects schema
+    _sandbox_migrate_to_nested
+
     # --- creds subcommand ---
     if test (count $argv) -gt 0; and test $argv[1] = creds
         set -l action $argv[2]
@@ -257,7 +262,7 @@ function claude-sandbox
                     echo "No credentials configured."
                     return
                 end
-                yq -r '.projects | to_entries[] | select(.value.credentials != null) | "\(.key)\n  type: \(.value.credentials.type)" + (if .value.credentials.keyPath then "\n  keyPath: \(.value.credentials.keyPath)" else "" end)' $f
+                yq -r '(.projects // {}) | to_entries[] | select(.value.credentials != null) | "\(.key)\n  type: \(.value.credentials.type)" + (if .value.credentials.keyPath then "\n  keyPath: \(.value.credentials.keyPath)" else "" end)' $f
             case '*'
                 echo "Usage: claude-sandbox creds {set [key-path]|show|clear|list}"
                 return 1
@@ -307,11 +312,6 @@ function claude-sandbox
         echo "Error: Docker is not running. Please start Docker Desktop first."
         return 1
     end
-
-    # Auto-migrate from legacy project-creds.json
-    _sandbox_migrate_from_json
-    # Migrate flat schema to global/projects schema
-    _sandbox_migrate_to_nested
 
     # Resolve credentials for this project
     set -l creds_type (_sandbox_config_read_creds_type $PROJECT_PATH)
