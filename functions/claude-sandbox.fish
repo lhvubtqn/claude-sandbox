@@ -1,6 +1,18 @@
 function _sandbox_config_file
     set -l repo_dir (dirname (dirname (realpath (status filename))))
-    echo $repo_dir/configurations.yml
+    set -l config $repo_dir/configurations.yml
+    if not test -f $config
+        set -l template $repo_dir/configurations.yml.template
+        if test -f $template
+            set -l tmp (mktemp)
+            sed -e "s|\${WORKDIR}|$repo_dir|g" \
+                -e "s|\${HOME}|$HOME|g" \
+                -e "s|~/|$HOME/|g" \
+                $template > $tmp
+            and mv $tmp $config
+        end
+    end
+    echo $config
 end
 
 function _sandbox_config_read_git_auth_type
