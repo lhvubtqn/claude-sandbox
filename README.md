@@ -44,6 +44,8 @@ mkdir -p ~/.config/fish/functions
 cp ~/.claude-sandbox/functions/claude-sandbox.fish ~/.config/fish/functions/
 ```
 
+On first launch, `configurations.yml` is auto-initialized with default global mounts (`.gitconfig`, `skills/`, `rules/`).
+
 **4. Build the image** (takes 10–20 minutes on first run)
 
 ```bash
@@ -99,6 +101,8 @@ claude --dangerously-skip-permissions
 | `vscode-server` | `/home/claude/.vscode-server` | VS Code Server (survives restarts) |
 | `claude-config` | `/home/claude/.claude` | Claude Code auth, config, and session; `.claude.json` lives here and is symlinked to `/home/claude/.claude.json` by the entrypoint |
 | `.gitconfig` (bind, ro) | `/home/claude/.gitconfig` | Git identity — repo-local copy, edit independently from host |
+| `~/.claude-sandbox/skills/` (bind, ro) | `/home/claude/.claude/skills/` | Custom Claude Code skills, version-controlled in this repo |
+| `~/.claude-sandbox/rules/` (bind, ro) | `/home/claude/.claude/rules/` | Global Claude Code rules, version-controlled in this repo |
 | SSH deploy key (bind, ro) | `/home/claude/.ssh/deploy_key` | Per-project SSH deploy key; included in the generated override file when configured |
 | `$PROJECT_PATH` (bind) | `/workspace/$PROJECT_NAME` | Your project files |
 
@@ -137,6 +141,29 @@ claude-sandbox mounts clear                                      # remove all ex
 ```
 
 Mount specs use Docker bind-mount syntax: `<host-path>:<container-path>[:<options>]`. Common options: `ro` (read-only).
+
+## Global workspace
+
+Always-on mounts (applied to every sandbox session regardless of project) are listed in `configurations.yml` under `global.mounts`. The defaults, initialized on first launch, are:
+
+```yaml
+global:
+  mounts:
+    - ~/.claude-sandbox/.gitconfig:/home/claude/.gitconfig:ro
+    - ~/.claude-sandbox/skills:/home/claude/.claude/skills:ro
+    - ~/.claude-sandbox/rules:/home/claude/.claude/rules:ro
+```
+
+Add skills to `~/.claude-sandbox/skills/` and rules to `~/.claude-sandbox/rules/` — they are committed to this repo and mounted read-only into every container.
+
+Manage global mounts with subcommands (run from any directory):
+
+```bash
+claude-sandbox global mounts list                              # show all global mounts
+claude-sandbox global mounts add ~/.foo:/bar:ro                # add a global mount
+claude-sandbox global mounts remove ~/.foo:/bar:ro             # remove a global mount
+claude-sandbox global mounts clear                             # remove all global mounts
+```
 
 ## Rebuilding
 
