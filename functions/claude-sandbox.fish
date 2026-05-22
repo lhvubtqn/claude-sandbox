@@ -370,7 +370,7 @@ function claude-sandbox
         printf "  %-34s%s\n" "(no args)"            "Launch sandbox for current project"
         printf "  %-34s%s\n" "stop [--rm]"           "Stop this project's container; --rm also removes it"
         printf "  %-34s%s\n" "list"                  "List all sandbox containers"
-        printf "  %-34s%s\n" "creds <action>"        "Manage per-project SSH credentials"
+        printf "  %-34s%s\n" "git-auth <action>"     "Manage per-project git auth"
         printf "  %-34s%s\n" "mounts <action>"       "Manage per-project volume entries"
         printf "  %-34s%s\n" "global mounts <action>" "Manage always-on global volume entries"
         echo ""
@@ -474,53 +474,53 @@ function claude-sandbox
         return
     end
 
-    # --- creds subcommand ---
-    if test (count $argv) -gt 0; and test $argv[1] = creds
+    # --- git-auth subcommand ---
+    if test (count $argv) -gt 0; and test $argv[1] = git-auth
         set -l action $argv[2]
         if contains -- --help $argv
-            echo "Usage: claude-sandbox creds {set [key-path]|show|clear|list}"
+            echo "Usage: claude-sandbox git-auth {set|show|clear|list}"
             echo ""
-            printf "  %-22s%s\n" "set [key-path]" "Configure SSH key (runs wizard if no path given)"
-            printf "  %-22s%s\n" "show"           "Print saved credential for current project"
-            printf "  %-22s%s\n" "clear"          "Remove saved credential (will prompt on next launch)"
-            printf "  %-22s%s\n" "list"           "List all saved project credentials"
+            printf "  %-22s%s\n" "set"   "Configure git credentials (SSH or PAT)"
+            printf "  %-22s%s\n" "show"  "Print saved git auth for current project"
+            printf "  %-22s%s\n" "clear" "Remove saved git auth (will prompt on next launch)"
+            printf "  %-22s%s\n" "list"  "List all saved project git auth"
             return 0
         end
         switch $action
             case set
-                if test (count $argv) -ge 3
-                    set -l key_path (_sandbox_expand_vars $argv[3])
-                    if not test -f $key_path
-                        echo "Error: key file not found: $key_path"
-                        return 1
-                    end
-                    _sandbox_config_write_creds_ssh $PROJECT_PATH $key_path
-                    echo "Saved SSH key for $PROJECT_PATH"
-                else
-                    _sandbox_creds_wizard $PROJECT_PATH $PROJECT_NAME
-                end
+                _sandbox_git_auth_wizard $PROJECT_PATH $PROJECT_NAME
             case show
-                set -l t (_sandbox_config_read_creds_type $PROJECT_PATH)
+                set -l t (_sandbox_config_read_git_auth_type $PROJECT_PATH)
                 if test -z "$t"
-                    echo "No credentials configured for $PROJECT_PATH"
-                else if test "$t" = ssh
-                    echo "type: ssh"
-                    echo "keyPath: "(_sandbox_config_read_creds_key $PROJECT_PATH)
+                    echo "No git auth configured for $PROJECT_PATH"
                 else
-                    echo "type: none (no git credentials)"
+                    echo "type: $t"
+                    if test "$t" = ssh; or test "$t" = pat
+                        echo "path: "(_sandbox_config_read_git_auth_path $PROJECT_PATH)
+                    end
+                    if test "$t" = ssh
+                        echo "prefer_ssh: "(_sandbox_config_read_git_auth_prefer_ssh $PROJECT_PATH)
+                    end
+                    set -l n (_sandbox_config_read_git_auth_identity_name $PROJECT_PATH)
+                    set -l e (_sandbox_config_read_git_auth_identity_email $PROJECT_PATH)
+                    if test -n "$n"; or test -n "$e"
+                        echo "identity:"
+                        echo "  name: $n"
+                        echo "  email: $e"
+                    end
                 end
             case clear
                 _sandbox_config_delete $PROJECT_PATH
-                echo "Cleared credentials for $PROJECT_PATH (will prompt on next launch)"
+                echo "Cleared git auth for $PROJECT_PATH (will prompt on next launch)"
             case list
                 set -l f (_sandbox_config_file)
                 if not test -f $f
-                    echo "No credentials configured."
+                    echo "No git auth configured."
                     return
                 end
-                yq -r '(.projects // {}) | to_entries[] | select(.value.credentials != null) | "\(.key)\n  type: \(.value.credentials.type)" + (if .value.credentials.keyPath then "\n  keyPath: \(.value.credentials.keyPath)" else "" end)' $f
+                yq -r '(.projects // {}) | to_entries[] | select(.value.git_auth != null) | "\(.key)\n  type: \(.value.git_auth.type)" + (if .value.git_auth.path then "\n  path: \(.value.git_auth.path)" else "" end) + (if .value.git_auth.identity then "\n  name: \(.value.git_auth.identity.name)\n  email: \(.value.git_auth.identity.email)" else "" end)' $f
             case '*'
-                echo "Usage: claude-sandbox creds {set [key-path]|show|clear|list}"
+                echo "Usage: claude-sandbox git-auth {set|show|clear|list}"
                 return 1
         end
         return
@@ -581,20 +581,20 @@ function claude-sandbox
         return 1
     end
 
-    # Resolve credentials for this project
-    set -l creds_type (_sandbox_config_read_creds_type $PROJECT_PATH)
-    if test -z "$creds_type"
-        _sandbox_creds_wizard $PROJECT_PATH $PROJECT_NAME
+    # Resolve git auth for this project
+    set -l auth_type (_sandbox_config_read_git_auth_type $PROJECT_PATH)
+    if test -z "$auth_type"
+        _sandbox_git_auth_wizard $PROJECT_PATH $PROJECT_NAME
         or return 1
-        set creds_type (_sandbox_config_read_creds_type $PROJECT_PATH)
+        set auth_type (_sandbox_config_read_git_auth_type $PROJECT_PATH)
     end
 
-    # Verify SSH key exists if configured
-    if test "$creds_type" = ssh
-        set -l key_path (_sandbox_expand_vars (_sandbox_config_read_creds_key $PROJECT_PATH))
-        if not test -f $key_path
-            echo "Error: SSH key not found: $key_path"
-            echo "Run 'claude-sandbox creds set' to reconfigure."
+    # Verify credentials file exists if configured
+    if test "$auth_type" = ssh; or test "$auth_type" = pat
+        set -l creds_path (_sandbox_expand_vars (_sandbox_config_read_git_auth_path $PROJECT_PATH))
+        if not test -f $creds_path
+            echo "Error: credentials file not found: $creds_path"
+            echo "Run 'claude-sandbox git-auth set' to reconfigure."
             return 1
         end
     end
