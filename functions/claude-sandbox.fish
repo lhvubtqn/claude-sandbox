@@ -84,6 +84,40 @@ function _sandbox_mounts_clear
     and mv $tmp $f
 end
 
+function _sandbox_global_mounts_list
+    set -l f (_sandbox_config_file)
+    test -f $f; or return
+    yq -r '.global.mounts // [] | .[]' $f 2>/dev/null
+end
+
+function _sandbox_global_mounts_add
+    # Usage: _sandbox_global_mounts_add <mount_spec>
+    set -l f (_sandbox_config_file)
+    test -f $f; or echo 'global: {}' > $f
+    set -l tmp (mktemp)
+    yq -y --arg m $argv[1] \
+        '.global.mounts = ((.global.mounts // []) + [$m])' $f > $tmp
+    and mv $tmp $f
+end
+
+function _sandbox_global_mounts_remove
+    # Usage: _sandbox_global_mounts_remove <mount_spec>
+    set -l f (_sandbox_config_file)
+    test -f $f; or return
+    set -l tmp (mktemp)
+    yq -y --arg m $argv[1] \
+        '.global.mounts = [(.global.mounts // [])[] | select(. != $m)]' $f > $tmp
+    and mv $tmp $f
+end
+
+function _sandbox_global_mounts_clear
+    set -l f (_sandbox_config_file)
+    test -f $f; or return
+    set -l tmp (mktemp)
+    yq -y 'del(.global.mounts)' $f > $tmp
+    and mv $tmp $f
+end
+
 function _sandbox_expand_path
     # Expand leading ~ to $HOME in a path read from user input
     string replace -r '^~/' $HOME/ $argv[1]
