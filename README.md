@@ -2,17 +2,6 @@
 
 A Docker sandbox for running [Claude Code](https://claude.ai/code) with `--dangerously-skip-permissions`. The container is the blast radius boundary — Claude can run any command freely without risking the host system.
 
-## What's inside
-
-| Tool | Source |
-|---|---|
-| Rust + Cargo | via official Solana install script |
-| Solana CLI (Agave) | via official Solana install script |
-| Anchor + AVM | via official Solana install script |
-| Node.js + npm + npx + Yarn | via official Solana install script |
-| Python 3 + pip | Ubuntu 24.04 |
-| Claude Code | via `claude.ai/install.sh` |
-
 ## Prerequisites
 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) with WSL2 integration enabled for your distro
@@ -29,33 +18,26 @@ A Docker sandbox for running [Claude Code](https://claude.ai/code) with `--dange
 git clone https://github.com/lhvubtqn/claude-sandbox
 ```
 
-Clone it anywhere — the install step sets up the data directory separately.
-
-**2. Install the fish function and completions**
+**2. Install the fish function**
 
 ```bash
 cd claude-sandbox && make install
 ```
 
-This symlinks the fish function and completions into `~/.config/fish/`. The function resolves the repo location at runtime via the symlink, so `configurations.yml`, `skills/`, and `rules/` are always read directly from the repo.
-
-**3. Build the image** (takes 10–20 minutes on first run)
+**3. Build the image** (10–20 minutes on first run)
 
 ```bash
 make build
 ```
 
-**4. Log in to Claude** inside the container (one-time setup)
+**4. Log in to Claude** (one-time)
 
 ```bash
-claude-sandbox  # from any project folder
-# then in the VS Code terminal:
+claude-sandbox  # open any project, then in the VS Code terminal:
 claude
 ```
 
-Claude config and session are stored in the `claude-config` named volume — login persists across restarts.
-
-## Usage
+## Use it
 
 From any project folder:
 
@@ -63,31 +45,24 @@ From any project folder:
 claude-sandbox
 ```
 
-This will:
-1. Start a new container for this project (or reattach if one is already running)
-2. Open VS Code attached to that container
+Opens VS Code attached to a container for the current project. Each project gets its own container — running `claude-sandbox` from a second project opens a second VS Code window without touching the first.
 
-Each project gets its own container — running `claude-sandbox` from a second project opens a second VS Code window without touching the first.
-
-Inside the container, run Claude with full permissions using the `yolo` alias:
+Inside the container:
 
 ```bash
 yolo
 ```
 
-This is an alias for `claude --dangerously-skip-permissions`.
+Runs Claude with full permissions (`claude --dangerously-skip-permissions`).
 
-## Managing containers
-
-Each project runs in its own container that persists until explicitly stopped.
+## Quick reference
 
 ```bash
-claude-sandbox stop        # stop this project's container (from project dir)
-claude-sandbox stop --rm   # stop and remove
-claude-sandbox list        # list all sandbox containers with status
+claude-sandbox --help
+claude-sandbox global --help
 ```
 
-`list` shows all containers created by `claude-sandbox`, their project paths, and their current status.
+---
 
 ## How it works
 
@@ -96,7 +71,7 @@ claude-sandbox list        # list all sandbox containers with status
 - **Claude auth**: the `claude-config` named volume holds your subscription login — it is shared across all project containers.
 - **Persistent caches**: named Docker volumes keep Cargo, npm, Solana config, and the VS Code Server across restarts and image rebuilds. All project containers share these caches.
 - **Host networking**: services running on the host (e.g. Godot MCP) are reachable inside the container at `host.docker.internal:<port>`.
-- **Per-repo SSH credentials**: on first launch in a project, a wizard prompts you to generate a deploy key, use an existing key, or skip. Your choice is saved per project path — subsequent launches are silent. See [Git credentials](#git-credentials) below.
+- **Per-repo SSH credentials**: on first launch in a project, a wizard prompts you to configure a deploy key or skip. Your choice is saved per project path — subsequent launches are silent.
 
 ## Volume map
 
@@ -108,86 +83,9 @@ claude-sandbox list        # list all sandbox containers with status
 | `npm-cache` | `/root/.npm` | npm cache |
 | `solana-config` | `/root/.config/solana` | Solana keypairs and config |
 | `vscode-server` | `/home/claude/.vscode-server` | VS Code Server (survives restarts) |
-| `claude-config` | `/home/claude/.claude` | Claude Code auth, config, and session; `.claude.json` lives here and is symlinked to `/home/claude/.claude.json` by the entrypoint |
+| `claude-config` | `/home/claude/.claude` | Claude Code auth, config, and session |
 | `~/.gitconfig` (bind, ro) | `/home/claude/.gitconfig` | Git identity from the host |
 | `<repo>/skills/` (bind, ro) | `/home/claude/.claude/skills/` | Custom Claude Code skills, version-controlled in this repo |
 | `<repo>/rules/` (bind, ro) | `/home/claude/.claude/rules/` | Global Claude Code rules, version-controlled in this repo |
-| SSH deploy key (bind, ro) | `/home/claude/.ssh/deploy_key` | Per-project SSH deploy key; included in the generated override file when configured |
+| SSH deploy key (bind, ro) | `/home/claude/.ssh/deploy_key` | Per-project SSH deploy key |
 | `$PROJECT_PATH` (bind) | `/workspace/$PROJECT_NAME` | Your project files |
-
-## Git credentials
-
-On the first `claude-sandbox` launch in any project, a wizard runs:
-
-```
-No SSH credentials configured for "/home/you/your-project".
-
-  1. Generate a new deploy key
-  2. Use an existing key
-  3. Skip (no git credentials)
-
-Choice: _
-```
-
-Option 1 runs `ssh-keygen`, copies the public key to your clipboard, and walks you through adding it as a deploy key in GitHub or GitLab before launching. Options 2 and 3 save immediately. Your choice is remembered per project path in `configurations.yml` in the repo.
-
-Manage credentials with subcommands (run from the project directory):
-
-```bash
-claude-sandbox creds set [key-path]   # reconfigure (runs wizard if no path given)
-claude-sandbox creds show             # print saved credential for current project
-claude-sandbox creds clear            # remove saved credential (will prompt on next launch)
-claude-sandbox creds list             # list all saved project credentials
-```
-
-Mount additional host resources (executables, assets, etc.) into the container on a per-project basis:
-
-```bash
-claude-sandbox mounts add /opt/godot:/usr/local/bin/godot:ro   # bind a host path into the container
-claude-sandbox mounts list                                       # show configured mounts for current project
-claude-sandbox mounts remove /opt/godot:/usr/local/bin/godot:ro # remove a mount
-claude-sandbox mounts clear                                      # remove all extra mounts for current project
-```
-
-Mount specs use Docker bind-mount syntax: `<host-path>:<container-path>[:<options>]`. Common options: `ro` (read-only).
-
-## Global workspace
-
-Always-on volume entries (applied to every container regardless of project) are listed in `configurations.yml` under `global.container.volumes`. The defaults are:
-
-```yaml
-global:
-  container:
-    volumes:
-      - ${HOME}/.gitconfig:/home/claude/.gitconfig:ro
-      - ${WORKDIR}/skills:/home/claude/.claude/skills:ro
-      - ${WORKDIR}/rules:/home/claude/.claude/rules:ro
-```
-
-`${WORKDIR}` expands to the repo directory at runtime (recorded by `make install`). `skills/` and `rules/` are resolved directly from the repo — edits are reflected immediately without reinstalling.
-
-Add skills to `skills/` and rules to `rules/` in the repo — they are mounted read-only into every container.
-
-Manage global mounts with subcommands (run from any directory):
-
-```bash
-claude-sandbox global mounts list                              # show all global mounts
-claude-sandbox global mounts add ~/.foo:/bar:ro                # add a global mount
-claude-sandbox global mounts remove ~/.foo:/bar:ro             # remove a global mount
-claude-sandbox global mounts clear                             # remove all global mounts
-```
-
-## Rebuilding
-
-After pulling changes or updating tool versions, run from the repo directory:
-
-```bash
-make build
-```
-
-Named volumes are preserved across rebuilds.
-
-## Deferred
-
-- Per-stack profiles (different extension sets for different languages)
-- Per-project devcontainer configs
