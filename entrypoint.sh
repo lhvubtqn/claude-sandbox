@@ -13,7 +13,7 @@ fi
 
 if [ "${SANDBOX_GIT_AUTH_TYPE:-}" = pat ] && [ -f /home/claude/.gitcreds ]; then
     TOKEN=$(cat /home/claude/.gitcreds)
-    printf 'https://%s@github.com\n' "$TOKEN" > /home/claude/.git-credentials
+    printf 'https://x-access-token:%s@github.com\n' "$TOKEN" > /home/claude/.git-credentials
     chmod 600 /home/claude/.git-credentials
     git config --global credential.helper "store --file /home/claude/.git-credentials"
 fi
