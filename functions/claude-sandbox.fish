@@ -252,8 +252,34 @@ function claude-sandbox
     set -l PROJECT_NAME (basename $PROJECT_PATH)
     set -l SANDBOX_DIR $HOME/.claude-sandbox
 
+    # --- top-level --help ---
+    if contains -- --help $argv; and test (count $argv) -eq 1
+        echo "Usage: claude-sandbox [--help]"
+        echo "       claude-sandbox <subcommand> [--help]"
+        echo ""
+        echo "Subcommands:"
+        printf "  %-34s%s\n" "(no args)"            "Launch sandbox for current project"
+        printf "  %-34s%s\n" "stop [--rm]"           "Stop this project's container; --rm also removes it"
+        printf "  %-34s%s\n" "list"                  "List all sandbox containers"
+        printf "  %-34s%s\n" "creds <action>"        "Manage per-project SSH credentials"
+        printf "  %-34s%s\n" "mounts <action>"       "Manage per-project volume entries"
+        printf "  %-34s%s\n" "global mounts <action>" "Manage always-on global volume entries"
+        echo ""
+        echo "Run 'claude-sandbox <subcommand> --help' for subcommand usage."
+        return 0
+    end
+
     # --- global subcommand ---
     if test (count $argv) -gt 0; and test $argv[1] = global
+        if contains -- --help $argv
+            echo "Usage: claude-sandbox global mounts {add <spec>|remove <spec>|list|clear}"
+            echo ""
+            printf "  %-24s%s\n" "add <spec>"    "Add a volume entry applied to every container"
+            printf "  %-24s%s\n" "remove <spec>" "Remove a global volume entry"
+            printf "  %-24s%s\n" "list"          "Show all global volume entries"
+            printf "  %-24s%s\n" "clear"         "Remove all global volume entries"
+            return 0
+        end
         if test (count $argv) -lt 3; or test "$argv[2]" != mounts
             echo "Usage: claude-sandbox global mounts {add <spec>|remove <spec>|list|clear}"
             return 1
@@ -342,6 +368,15 @@ function claude-sandbox
     # --- creds subcommand ---
     if test (count $argv) -gt 0; and test $argv[1] = creds
         set -l action $argv[2]
+        if contains -- --help $argv
+            echo "Usage: claude-sandbox creds {set [key-path]|show|clear|list}"
+            echo ""
+            printf "  %-22s%s\n" "set [key-path]" "Configure SSH key (runs wizard if no path given)"
+            printf "  %-22s%s\n" "show"           "Print saved credential for current project"
+            printf "  %-22s%s\n" "clear"          "Remove saved credential (will prompt on next launch)"
+            printf "  %-22s%s\n" "list"           "List all saved project credentials"
+            return 0
+        end
         switch $action
             case set
                 if test (count $argv) -ge 3
@@ -385,6 +420,18 @@ function claude-sandbox
     # --- mounts subcommand ---
     if test (count $argv) -gt 0; and test $argv[1] = mounts
         set -l action $argv[2]
+        if contains -- --help $argv
+            echo "Usage: claude-sandbox mounts {add <spec>|remove <spec>|list|clear}"
+            echo ""
+            printf "  %-24s%s\n" "add <spec>"    "Add a volume entry for current project"
+            printf "  %-24s%s\n" "remove <spec>" "Remove a volume entry"
+            printf "  %-24s%s\n" "list"          "Show all volume entries for current project"
+            printf "  %-24s%s\n" "clear"         "Remove all volume entries for current project"
+            echo ""
+            echo "  <spec> format: <host-path>:<container-path>[:<options>]"
+            echo "  Supports \${WORKDIR}, \${HOME}, and ~ in host paths."
+            return 0
+        end
         switch $action
             case add
                 if test (count $argv) -lt 3
