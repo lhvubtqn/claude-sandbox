@@ -160,7 +160,7 @@ function _sandbox_migrate_to_nested
     end
     echo "Migrating configurations.yml to global/projects schema..."
     set -l tmp (mktemp)
-    yq -y '{global: {mounts: ["~/.claude-sandbox/.gitconfig:/home/claude/.gitconfig:ro"]}, projects: .}' \
+    yq -y '{global: {mounts: ["~/.claude-sandbox/.gitconfig:/home/claude/.gitconfig:ro", "~/.claude-sandbox/skills:/home/claude/.claude/skills:ro", "~/.claude-sandbox/rules:/home/claude/.claude/rules:ro"]}, projects: .}' \
         $f > $tmp
     and mv $tmp $f
     and echo "Migration complete."
