@@ -183,6 +183,7 @@ function _sandbox_render_config
     # tab-delimited "category<TAB>value" lines. Single source of truth for drift
     # detection. Must mirror the args _sandbox_docker_run actually applies.
     set -l f (_sandbox_config_file)
+    test -f $f; or return
     set -l p $argv[1]
 
     # image (single value; project overrides global; default claude-sandbox)
@@ -215,7 +216,8 @@ function _sandbox_render_config
         printf 'git_auth_path\t%s\n' (_sandbox_config_read_git_auth_path $p)
     end
     if test "$auth_type" = ssh
-        if test (_sandbox_config_read_git_auth_prefer_ssh $p) = true
+        set -l prefer_ssh (_sandbox_config_read_git_auth_prefer_ssh $p)
+        if test "$prefer_ssh" = true
             printf 'git_prefer_ssh\t%s\n' true
         end
     end
