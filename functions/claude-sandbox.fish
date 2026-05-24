@@ -456,6 +456,7 @@ function claude-sandbox
         printf "  %-34s%s\n" "(no args)"            "Launch sandbox for current project"
         printf "  %-34s%s\n" "stop [--rm]"           "Stop this project's container; --rm also removes it"
         printf "  %-34s%s\n" "list"                  "List all sandbox containers"
+        printf "  %-34s%s\n" "open <target>"         "Open VS Code for a sandbox by path or container name"
         printf "  %-34s%s\n" "git-auth <action>"     "Manage per-project git auth"
         printf "  %-34s%s\n" "mounts <action>"       "Manage per-project volume entries"
         printf "  %-34s%s\n" "global mounts <action>" "Manage always-on global volume entries"
@@ -658,6 +659,45 @@ function claude-sandbox
                 echo "Usage: claude-sandbox mounts {add <spec>|remove <spec>|list|clear}"
                 return 1
         end
+        return
+    end
+
+    # --- open subcommand ---
+    if test (count $argv) -gt 0; and test $argv[1] = open
+        if contains -- --help $argv
+            echo "Usage: claude-sandbox open <target>"
+            echo ""
+            echo "  Opens VS Code attached to a sandbox container."
+            echo ""
+            echo "  <target> may be either:"
+            echo "    - A project path (absolute or relative). Creates and starts a"
+            echo "      container if one does not exist for that path."
+            echo "    - A container name (e.g. claude-sandbox-abc12345) from"
+            echo "      'claude-sandbox list'. Must already exist."
+            echo ""
+            echo "  Tab completion suggests both forms for every existing sandbox."
+            return 0
+        end
+        if test (count $argv) -lt 2
+            echo "Usage: claude-sandbox open <target>"
+            return 1
+        end
+        set -l target $argv[2]
+
+        # Try as container name first: must exist AND carry our label.
+        set -l labeled_path (docker inspect --format '{{ index .Config.Labels "claude-sandbox.project" }}' $target 2>/dev/null)
+        if test -n "$labeled_path"
+            _sandbox_launch $labeled_path
+            return
+        end
+
+        # Fall back to path mode.
+        set -l resolved (realpath $target 2>/dev/null)
+        if test -z "$resolved"
+            echo "Error: '$target' is neither an existing sandbox container nor a valid path."
+            return 1
+        end
+        _sandbox_launch $resolved
         return
     end
 
