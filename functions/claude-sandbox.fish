@@ -533,6 +533,29 @@ function _sandbox_launch
     set -l container_name (_sandbox_container_name $PROJECT_PATH)
     set -l container_status (docker inspect --format '{{.State.Status}}' $container_name 2>/dev/null)
 
+    # Detect config drift for a reusable existing container and offer to restart.
+    # Scoped to states the launch flow would otherwise reuse; transient states
+    # (restarting/removing/dead) keep their dedicated handling in the switch below.
+    if contains -- "$container_status" running exited created paused
+        set -l drift_lines (_sandbox_config_diff $PROJECT_PATH $container_name)
+        if test (count $drift_lines) -gt 0
+            echo "Configuration for $PROJECT_NAME has changed since this container was created:"
+            printf '%s\n' $drift_lines
+            read -P "Restart the container to apply these changes? [Y/n] " answer
+            or set answer n
+            if test -z "$answer"; or string match -qi 'y*' -- $answer
+                echo "Restarting sandbox for $PROJECT_NAME..."
+                _sandbox_recreate $container_name $PROJECT_PATH $PROJECT_NAME
+                or begin
+                    echo "Error: Failed to recreate container."
+                    return 1
+                end
+                _sandbox_attach $container_name $PROJECT_NAME
+                return
+            end
+        end
+    end
+
     switch $container_status
         case running
             echo "Attaching to running sandbox for $PROJECT_NAME..."
