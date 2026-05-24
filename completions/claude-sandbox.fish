@@ -1,5 +1,9 @@
 # Tab completions for claude-sandbox
 
+# Clear any previously-registered rules so re-sourcing this file doesn't stack
+# stale completions (e.g. when $subcommands changes between versions).
+complete -c claude-sandbox -e
+
 set -l subcommands stop list open git-auth mounts global
 
 # No file completion at top level
@@ -50,7 +54,6 @@ function __claude_sandbox_open_targets
             set -l name $parts[1]
             set -l path $parts[2]
             set -l container_status $parts[3]
-            printf '%s\t%s\n' $path $container_status
             printf '%s\t%s\n' $name "$path ($container_status)"
         end
 end
