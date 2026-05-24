@@ -793,10 +793,11 @@ function claude-sandbox
             echo "  <target> may be either:"
             echo "    - A project path (absolute or relative). Creates and starts a"
             echo "      container if one does not exist for that path."
-            echo "    - A container name (e.g. claude-sandbox-abc12345) from"
-            echo "      'claude-sandbox list'. Must already exist."
+            echo "    - A container name (e.g. claude-sandbox-abc12345) or its"
+            echo "      bare hash (abc12345) from 'claude-sandbox list'. Must"
+            echo "      already exist."
             echo ""
-            echo "  Tab completion suggests both forms for every existing sandbox."
+            echo "  Tab completion lists the hash and path for every existing sandbox."
             return 0
         end
         if test (count $argv) -lt 2
@@ -805,11 +806,15 @@ function claude-sandbox
         end
         set -l target $argv[2]
 
-        # Try as container name first: must exist AND carry our label.
-        set -l labeled_path (docker inspect --format '{{ index .Config.Labels "claude-sandbox.project" }}' $target 2>/dev/null)
-        if test -n "$labeled_path"
-            _sandbox_launch $labeled_path
-            return
+        # Try as a container reference first: either the full name
+        # (claude-sandbox-abc12345) or the bare hash (abc12345) that tab
+        # completion inserts. Must exist AND carry our label.
+        for ref in $target claude-sandbox-$target
+            set -l labeled_path (docker inspect --format '{{ index .Config.Labels "claude-sandbox.project" }}' $ref 2>/dev/null)
+            if test -n "$labeled_path"
+                _sandbox_launch $labeled_path
+                return
+            end
         end
 
         # Fall back to path mode.
