@@ -290,6 +290,10 @@ function _sandbox_docker_run
     # Project workspace bind mount
     set args $args -v "$project_path:/workspace/$project_name"
 
+    # Config snapshot label for drift detection
+    set -l config_snapshot (_sandbox_render_config $project_path | base64 | tr -d '\n')
+    set args $args --label "claude-sandbox.config-snapshot=$config_snapshot"
+
     set args $args \
         --workdir /workspace/$project_name \
         --entrypoint /entrypoint.sh
