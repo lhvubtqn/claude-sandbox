@@ -627,10 +627,16 @@ function claude-sandbox
             echo "Attaching to running sandbox for $PROJECT_NAME..."
         case exited created paused
             echo "Starting sandbox for $PROJECT_NAME..."
-            docker start $container_name
-            or begin
-                echo "Error: Failed to start container."
-                return 1
+            if not docker start $container_name 2>/dev/null
+                # Stopped containers can have stale bind-mount paths (e.g. after Docker Desktop
+                # restart). The container layer is stateless so it's safe to recreate.
+                echo "Start failed (stale container). Recreating..."
+                docker rm $container_name
+                _sandbox_docker_run $container_name $PROJECT_PATH $PROJECT_NAME
+                or begin
+                    echo "Error: Failed to start container."
+                    return 1
+                end
             end
         case restarting
             echo "Container is restarting, please wait and retry."
