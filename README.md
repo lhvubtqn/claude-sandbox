@@ -49,6 +49,8 @@ claude-sandbox --help
 claude-sandbox global --help
 ```
 
+Use `claude-sandbox open <path-or-container>` from anywhere to attach VS Code to a sandbox. Tab completion lists every existing container's path and hash.
+
 ---
 
 ## How it works
