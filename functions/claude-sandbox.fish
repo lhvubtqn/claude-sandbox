@@ -901,11 +901,10 @@ function claude-sandbox
         set -l project_name (basename $resolved)
         set -l container_name (_sandbox_container_name $resolved)
 
-        _sandbox_preflight $resolved; or return 1
-
         set -l rs_status (docker inspect --format '{{.State.Status}}' $container_name 2>/dev/null)
         if test -n "$rs_status"
             # Existing container: show what will change (for transparency), then recreate.
+            _sandbox_preflight $resolved; or return 1
             set -l drift_lines (_sandbox_config_diff $resolved $container_name)
             if test (count $drift_lines) -gt 0
                 echo "Applying configuration changes to $project_name:"
@@ -913,13 +912,16 @@ function claude-sandbox
             end
             echo "Restarting sandbox for $project_name..."
         else
-            # No container yet: confirm before creating (default No).
+            # No container yet: confirm before creating (default No). Run preflight
+            # (which may launch the git-auth wizard) only after the user confirms, so
+            # declining never writes auth config for a project we don't create.
             read -P "No sandbox exists for $resolved. Create one? [y/N] " answer
             or set answer n
             if not string match -qi 'y*' -- $answer
                 echo "Aborted."
                 return 1
             end
+            _sandbox_preflight $resolved; or return 1
             echo "Creating new sandbox for $project_name..."
         end
 
