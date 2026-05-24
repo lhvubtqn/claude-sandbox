@@ -376,6 +376,73 @@ function _sandbox_git_auth_wizard
     end
 end
 
+function _sandbox_launch
+    # Usage: _sandbox_launch <project_path>
+    set -l PROJECT_PATH $argv[1]
+    set -l PROJECT_NAME (basename $PROJECT_PATH)
+
+    if not docker info > /dev/null 2>&1
+        echo "Error: Docker is not running. Please start Docker Desktop first."
+        return 1
+    end
+
+    # Resolve git auth for this project
+    set -l auth_type (_sandbox_config_read_git_auth_type $PROJECT_PATH)
+    if test -z "$auth_type"
+        _sandbox_git_auth_wizard $PROJECT_PATH $PROJECT_NAME
+        or return 1
+        set auth_type (_sandbox_config_read_git_auth_type $PROJECT_PATH)
+    end
+
+    # Verify credentials file exists if configured
+    if test "$auth_type" = ssh; or test "$auth_type" = pat
+        set -l creds_path (_sandbox_expand_vars (_sandbox_config_read_git_auth_path $PROJECT_PATH))
+        if not test -f $creds_path
+            echo "Error: credentials file not found: $creds_path"
+            echo "Run 'claude-sandbox git-auth set' to reconfigure."
+            return 1
+        end
+    end
+
+    set -l container_name (_sandbox_container_name $PROJECT_PATH)
+    set -l container_status (docker inspect --format '{{.State.Status}}' $container_name 2>/dev/null)
+
+    switch $container_status
+        case running
+            echo "Attaching to running sandbox for $PROJECT_NAME..."
+        case exited created paused
+            echo "Starting sandbox for $PROJECT_NAME..."
+            if not docker start $container_name 2>/dev/null
+                # Stopped containers can have stale bind-mount paths (e.g. after Docker Desktop
+                # restart). The container layer is stateless so it's safe to recreate.
+                echo "Start failed (stale container). Recreating..."
+                docker rm $container_name
+                _sandbox_docker_run $container_name $PROJECT_PATH $PROJECT_NAME
+                or begin
+                    echo "Error: Failed to start container."
+                    return 1
+                end
+            end
+        case restarting
+            echo "Container is restarting, please wait and retry."
+            return 1
+        case removing dead
+            echo "Container is being removed or dead; run 'claude-sandbox stop --rm' and retry."
+            return 1
+        case '*'
+            echo "Creating new sandbox for $PROJECT_NAME..."
+            _sandbox_docker_run $container_name $PROJECT_PATH $PROJECT_NAME
+            or begin
+                echo "Error: Failed to create container."
+                return 1
+            end
+    end
+
+    set -l container_json "{\"containerName\":\"/$container_name\"}"
+    set -l encoded (printf '%s' $container_json | xxd -p | tr -d '\n')
+    code --folder-uri "vscode-remote://attached-container+$encoded/workspace/$PROJECT_NAME"
+end
+
 function claude-sandbox
     set -l PROJECT_PATH (pwd)
     set -l PROJECT_NAME (basename $PROJECT_PATH)
@@ -596,64 +663,5 @@ function claude-sandbox
     end
 
     # --- launch flow ---
-    if not docker info > /dev/null 2>&1
-        echo "Error: Docker is not running. Please start Docker Desktop first."
-        return 1
-    end
-
-    # Resolve git auth for this project
-    set -l auth_type (_sandbox_config_read_git_auth_type $PROJECT_PATH)
-    if test -z "$auth_type"
-        _sandbox_git_auth_wizard $PROJECT_PATH $PROJECT_NAME
-        or return 1
-        set auth_type (_sandbox_config_read_git_auth_type $PROJECT_PATH)
-    end
-
-    # Verify credentials file exists if configured
-    if test "$auth_type" = ssh; or test "$auth_type" = pat
-        set -l creds_path (_sandbox_expand_vars (_sandbox_config_read_git_auth_path $PROJECT_PATH))
-        if not test -f $creds_path
-            echo "Error: credentials file not found: $creds_path"
-            echo "Run 'claude-sandbox git-auth set' to reconfigure."
-            return 1
-        end
-    end
-
-    set -l container_name (_sandbox_container_name $PROJECT_PATH)
-    set -l container_status (docker inspect --format '{{.State.Status}}' $container_name 2>/dev/null)
-
-    switch $container_status
-        case running
-            echo "Attaching to running sandbox for $PROJECT_NAME..."
-        case exited created paused
-            echo "Starting sandbox for $PROJECT_NAME..."
-            if not docker start $container_name 2>/dev/null
-                # Stopped containers can have stale bind-mount paths (e.g. after Docker Desktop
-                # restart). The container layer is stateless so it's safe to recreate.
-                echo "Start failed (stale container). Recreating..."
-                docker rm $container_name
-                _sandbox_docker_run $container_name $PROJECT_PATH $PROJECT_NAME
-                or begin
-                    echo "Error: Failed to start container."
-                    return 1
-                end
-            end
-        case restarting
-            echo "Container is restarting, please wait and retry."
-            return 1
-        case removing dead
-            echo "Container is being removed or dead; run 'claude-sandbox stop --rm' and retry."
-            return 1
-        case '*'
-            echo "Creating new sandbox for $PROJECT_NAME..."
-            _sandbox_docker_run $container_name $PROJECT_PATH $PROJECT_NAME
-            or begin
-                echo "Error: Failed to create container."
-                return 1
-            end
-    end
-
-    set -l container_json "{\"containerName\":\"/$container_name\"}"
-    set -l encoded (printf '%s' $container_json | xxd -p | tr -d '\n')
-    code --folder-uri "vscode-remote://attached-container+$encoded/workspace/$PROJECT_NAME"
+    _sandbox_launch $PROJECT_PATH
 end
