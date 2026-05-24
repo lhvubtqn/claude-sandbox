@@ -541,6 +541,7 @@ function _sandbox_launch
         if test (count $drift_lines) -gt 0
             echo "Configuration for $PROJECT_NAME has changed since this container was created:"
             printf '%s\n' $drift_lines
+            echo ""
             read -P "Restart the container to apply these changes? [Y/n] " answer
             or set answer n
             if test -z "$answer"; or string match -qi 'y*' -- $answer
