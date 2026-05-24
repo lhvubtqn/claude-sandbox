@@ -177,6 +177,58 @@ function _sandbox_container_name
     echo "claude-sandbox-$hash"
 end
 
+function _sandbox_render_config
+    # Usage: _sandbox_render_config <project_path>
+    # Emits a canonical, sorted snapshot of the effective container config as
+    # tab-delimited "category<TAB>value" lines. Single source of truth for drift
+    # detection. Must mirror the args _sandbox_docker_run actually applies.
+    set -l f (_sandbox_config_file)
+    set -l p $argv[1]
+
+    # image (single value; project overrides global; default claude-sandbox)
+    set -l image (yq -r --arg p $p \
+        '(.projects[$p].container.image // .global.container.image // "claude-sandbox")' $f 2>/dev/null)
+    printf 'image\t%s\n' $image
+
+    # volumes: global then project, sorted
+    for vol in (yq -r --arg p $p \
+        '((.global.container.volumes // []) + (.projects[$p].container.volumes // [])) | .[]' $f 2>/dev/null | sort)
+        printf 'volume\t%s\n' $vol
+    end
+
+    # security_opt: global then project, sorted
+    for opt in (yq -r --arg p $p \
+        '((.global.container.security_opt // []) + (.projects[$p].container.security_opt // [])) | .[]' $f 2>/dev/null | sort)
+        printf 'security_opt\t%s\n' $opt
+    end
+
+    # extra_hosts: global then project, sorted
+    for host in (yq -r --arg p $p \
+        '((.global.container.extra_hosts // []) + (.projects[$p].container.extra_hosts // [])) | .[]' $f 2>/dev/null | sort)
+        printf 'extra_host\t%s\n' $host
+    end
+
+    # git auth: emit each line only when _sandbox_docker_run would apply the arg
+    set -l auth_type (_sandbox_config_read_git_auth_type $p)
+    printf 'git_auth_type\t%s\n' $auth_type
+    if test "$auth_type" = ssh; or test "$auth_type" = pat
+        printf 'git_auth_path\t%s\n' (_sandbox_config_read_git_auth_path $p)
+    end
+    if test "$auth_type" = ssh
+        if test (_sandbox_config_read_git_auth_prefer_ssh $p) = true
+            printf 'git_prefer_ssh\t%s\n' true
+        end
+    end
+    set -l id_name (_sandbox_config_read_git_auth_identity_name $p)
+    set -l id_email (_sandbox_config_read_git_auth_identity_email $p)
+    if test -n "$id_name"
+        printf 'git_identity_name\t%s\n' $id_name
+    end
+    if test -n "$id_email"
+        printf 'git_identity_email\t%s\n' $id_email
+    end
+end
+
 function _sandbox_docker_run
     # Usage: _sandbox_docker_run <container_name> <project_path> <project_name>
     set -l container_name $argv[1]
