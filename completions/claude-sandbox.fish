@@ -49,9 +49,9 @@ function __claude_sandbox_open_targets
             set -l parts (string split \t -- $line)
             set -l name $parts[1]
             set -l path $parts[2]
-            set -l ctr_status $parts[3]
-            printf '%s\t%s\n' $path $ctr_status
-            printf '%s\t%s\n' $name "$path ($ctr_status)"
+            set -l container_status $parts[3]
+            printf '%s\t%s\n' $path $container_status
+            printf '%s\t%s\n' $name "$path ($container_status)"
         end
 end
 
