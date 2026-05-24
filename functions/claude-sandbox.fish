@@ -231,6 +231,37 @@ function _sandbox_render_config
     end
 end
 
+function _sandbox_config_diff
+    # Usage: _sandbox_config_diff <project_path> <container_name>
+    # Prints "  - category value" / "  + category value" lines for config changes.
+    # Returns 1 if there is any drift, 0 if identical.
+    set -l project_path $argv[1]
+    set -l container_name $argv[2]
+
+    set -l before (mktemp)
+    set -l after (mktemp)
+
+    # Stored snapshot (empty file if the label is absent — e.g. pre-feature containers)
+    docker inspect --format '{{ index .Config.Labels "claude-sandbox.config-snapshot" }}' $container_name 2>/dev/null \
+        | base64 -d 2>/dev/null | sort > $before
+    _sandbox_render_config $project_path | sort > $after
+
+    set -l drift 0
+    # Removed: present at creation, absent now
+    for line in (comm -23 $before $after)
+        printf '  - %s\n' (string replace \t ' ' -- $line)
+        set drift 1
+    end
+    # Added: present now, absent at creation
+    for line in (comm -13 $before $after)
+        printf '  + %s\n' (string replace \t ' ' -- $line)
+        set drift 1
+    end
+
+    rm -f $before $after
+    return $drift
+end
+
 function _sandbox_docker_run
     # Usage: _sandbox_docker_run <container_name> <project_path> <project_name>
     set -l container_name $argv[1]
