@@ -604,6 +604,7 @@ function claude-sandbox
         printf "  %-34s%s\n" "stop [--rm]"           "Stop this project's container; --rm also removes it"
         printf "  %-34s%s\n" "list"                  "List all sandbox containers"
         printf "  %-34s%s\n" "open <target>"         "Open VS Code for a sandbox by path or container name"
+        printf "  %-34s%s\n" "restart <target>"      "Recreate a sandbox with current config and reattach"
         printf "  %-34s%s\n" "git-auth <action>"     "Manage per-project git auth"
         printf "  %-34s%s\n" "mounts <action>"       "Manage per-project volume entries"
         printf "  %-34s%s\n" "global mounts <action>" "Manage always-on global volume entries"
@@ -850,6 +851,84 @@ function claude-sandbox
             return 1
         end
         _sandbox_launch $resolved
+        return
+    end
+
+    # --- restart subcommand ---
+    if test (count $argv) -gt 0; and test $argv[1] = restart
+        if contains -- --help $argv
+            echo "Usage: claude-sandbox restart <target>"
+            echo ""
+            echo "  Recreates a sandbox container with the current configuration and"
+            echo "  reattaches VS Code. Use this to apply configuration changes"
+            echo "  (e.g. 'claude-sandbox mounts add') to an existing container."
+            echo ""
+            echo "  <target> may be either:"
+            echo "    - A project path (absolute or relative)."
+            echo "    - A container name (e.g. claude-sandbox-abc12345) or its"
+            echo "      bare hash (abc12345) from 'claude-sandbox list'."
+            echo ""
+            echo "  Any existing container for the target is stopped and removed first;"
+            echo "  this ends any running Claude session in that container. If no"
+            echo "  container exists for a path target, you are prompted before one"
+            echo "  is created."
+            return 0
+        end
+        if test (count $argv) -lt 2
+            echo "Usage: claude-sandbox restart <target>"
+            return 1
+        end
+        set -l target $argv[2]
+
+        # Resolve target like 'open': container reference first (full name or bare
+        # hash that tab completion inserts), then fall back to a project path.
+        set -l resolved
+        for ref in $target claude-sandbox-$target
+            set -l labeled_path (docker inspect --format '{{ index .Config.Labels "claude-sandbox.project" }}' $ref 2>/dev/null)
+            if test -n "$labeled_path"
+                set resolved $labeled_path
+                break
+            end
+        end
+        if test -z "$resolved"
+            set resolved (realpath $target 2>/dev/null)
+            if test -z "$resolved"
+                echo "Error: '$target' is neither an existing sandbox container nor a valid path."
+                return 1
+            end
+        end
+
+        set -l project_name (basename $resolved)
+        set -l container_name (_sandbox_container_name $resolved)
+
+        _sandbox_preflight $resolved; or return 1
+
+        set -l rs_status (docker inspect --format '{{.State.Status}}' $container_name 2>/dev/null)
+        if test -n "$rs_status"
+            # Existing container: show what will change (for transparency), then recreate.
+            set -l drift_lines (_sandbox_config_diff $resolved $container_name)
+            if test (count $drift_lines) -gt 0
+                echo "Applying configuration changes to $project_name:"
+                printf '%s\n' $drift_lines
+            end
+            echo "Restarting sandbox for $project_name..."
+        else
+            # No container yet: confirm before creating (default No).
+            read -P "No sandbox exists for $resolved. Create one? [y/N] " answer
+            or set answer n
+            if not string match -qi 'y*' -- $answer
+                echo "Aborted."
+                return 1
+            end
+            echo "Creating new sandbox for $project_name..."
+        end
+
+        _sandbox_recreate $container_name $resolved $project_name
+        or begin
+            echo "Error: Failed to recreate container."
+            return 1
+        end
+        _sandbox_attach $container_name $project_name
         return
     end
 
