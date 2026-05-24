@@ -1,6 +1,6 @@
 # Tab completions for claude-sandbox
 
-set -l subcommands stop list git-auth mounts global
+set -l subcommands stop list open git-auth mounts global
 
 # No file completion at top level
 complete -c claude-sandbox -f
@@ -15,6 +15,9 @@ complete -c claude-sandbox \
 complete -c claude-sandbox \
     -n "not __fish_seen_subcommand_from $subcommands" \
     -a list   -d 'List all sandbox containers'
+complete -c claude-sandbox \
+    -n "not __fish_seen_subcommand_from $subcommands" \
+    -a open   -d 'Open VS Code for a sandbox by path or container name'
 complete -c claude-sandbox \
     -n "not __fish_seen_subcommand_from $subcommands" \
     -a git-auth -d 'Manage per-project git auth'
@@ -36,6 +39,28 @@ complete -c claude-sandbox \
 # list
 complete -c claude-sandbox \
     -n "__fish_seen_subcommand_from list" \
+    -l help -d 'Show usage'
+
+# open: completion source draws from existing sandbox containers
+function __claude_sandbox_open_targets
+    docker ps -a --filter "label=claude-sandbox.project" \
+        --format '{{.Names}}\t{{.Label "claude-sandbox.project"}}\t{{.Status}}' 2>/dev/null \
+        | while read -l line
+            set -l parts (string split \t -- $line)
+            set -l name $parts[1]
+            set -l path $parts[2]
+            set -l ctr_status $parts[3]
+            printf '%s\t%s\n' $path $ctr_status
+            printf '%s\t%s\n' $name "$path ($ctr_status)"
+        end
+end
+
+complete -c claude-sandbox -f \
+    -n "__fish_seen_subcommand_from open" \
+    -a '(__claude_sandbox_open_targets)'
+
+complete -c claude-sandbox \
+    -n "__fish_seen_subcommand_from open" \
     -l help -d 'Show usage'
 
 # git-auth actions
