@@ -4,7 +4,7 @@
 # stale completions (e.g. when $subcommands changes between versions).
 complete -c claude-sandbox -e
 
-set -l subcommands stop list open git-auth mounts global
+set -l subcommands stop list open restart git-auth mounts global
 
 # No file completion at top level
 complete -c claude-sandbox -f
@@ -22,6 +22,9 @@ complete -c claude-sandbox \
 complete -c claude-sandbox \
     -n "not __fish_seen_subcommand_from $subcommands" \
     -a open   -d 'Open VS Code for a sandbox by path or container name'
+complete -c claude-sandbox \
+    -n "not __fish_seen_subcommand_from $subcommands" \
+    -a restart -d 'Recreate a sandbox with current config and reattach'
 complete -c claude-sandbox \
     -n "not __fish_seen_subcommand_from $subcommands" \
     -a git-auth -d 'Manage per-project git auth'
@@ -68,6 +71,14 @@ complete -c claude-sandbox -f \
 
 complete -c claude-sandbox \
     -n "__fish_seen_subcommand_from open" \
+    -l help -d 'Show usage'
+
+complete -c claude-sandbox -f \
+    -n "__fish_seen_subcommand_from restart" \
+    -a '(__claude_sandbox_open_targets)'
+
+complete -c claude-sandbox \
+    -n "__fish_seen_subcommand_from restart" \
     -l help -d 'Show usage'
 
 # git-auth actions
