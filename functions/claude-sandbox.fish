@@ -514,9 +514,11 @@ function _sandbox_recreate
     set -l st (docker inspect --format '{{.State.Status}}' $container_name 2>/dev/null)
     if test "$st" = running; or test "$st" = paused; or test "$st" = restarting
         docker stop $container_name > /dev/null
+        or return 1
     end
     if test -n "$st"
         docker rm $container_name > /dev/null
+        or return 1
     end
     _sandbox_docker_run $container_name $project_path $project_name
 end
