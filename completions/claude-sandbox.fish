@@ -4,7 +4,7 @@
 # stale completions (e.g. when $subcommands changes between versions).
 complete -c claude-sandbox -e
 
-set -l subcommands stop list open git-auth mounts global
+set -l subcommands stop list open restart git-auth mounts global
 
 # No file completion at top level
 complete -c claude-sandbox -f
@@ -22,6 +22,9 @@ complete -c claude-sandbox \
 complete -c claude-sandbox \
     -n "not __fish_seen_subcommand_from $subcommands" \
     -a open   -d 'Open VS Code for a sandbox by path or container name'
+complete -c claude-sandbox \
+    -n "not __fish_seen_subcommand_from $subcommands" \
+    -a restart -d 'Recreate a sandbox with current config and reattach'
 complete -c claude-sandbox \
     -n "not __fish_seen_subcommand_from $subcommands" \
     -a git-auth -d 'Manage per-project git auth'
@@ -45,16 +48,20 @@ complete -c claude-sandbox \
     -n "__fish_seen_subcommand_from list" \
     -l help -d 'Show usage'
 
-# open: completion source draws from existing sandbox containers
+# open: completion source draws from existing sandbox containers.
+# We complete on the bare hash rather than the full container name: every
+# container shares the "claude-sandbox-" prefix, which fish elides to "…-" in
+# the pager (it hides prefixes common to all candidates). Completing on the
+# hash sidesteps that — nothing gets clipped — and the path shown alongside
+# makes each entry recognizable. `open` accepts the bare hash (see function).
 function __claude_sandbox_open_targets
     docker ps -a --filter "label=claude-sandbox.project" \
-        --format '{{.Names}}\t{{.Label "claude-sandbox.project"}}\t{{.Status}}' 2>/dev/null \
+        --format '{{.Names}}\t{{.Label "claude-sandbox.project"}}' 2>/dev/null \
         | while read -l line
             set -l parts (string split \t -- $line)
-            set -l name $parts[1]
+            set -l hash (string replace -- 'claude-sandbox-' '' $parts[1])
             set -l path $parts[2]
-            set -l container_status $parts[3]
-            printf '%s\t%s\n' $name "$path ($container_status)"
+            printf '%s\t%s\n' $hash $path
         end
 end
 
@@ -64,6 +71,14 @@ complete -c claude-sandbox -f \
 
 complete -c claude-sandbox \
     -n "__fish_seen_subcommand_from open" \
+    -l help -d 'Show usage'
+
+complete -c claude-sandbox -f \
+    -n "__fish_seen_subcommand_from restart" \
+    -a '(__claude_sandbox_open_targets)'
+
+complete -c claude-sandbox \
+    -n "__fish_seen_subcommand_from restart" \
     -l help -d 'Show usage'
 
 # git-auth actions

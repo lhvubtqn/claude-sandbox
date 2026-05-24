@@ -51,11 +51,14 @@ claude-sandbox global --help
 
 Use `claude-sandbox open <path-or-container>` from anywhere to attach VS Code to a sandbox. Tab completion lists every existing container's path and hash.
 
+Use `claude-sandbox restart <path-or-container>` to recreate a container with the current config — the way to apply changes from `claude-sandbox mounts add` and friends. On reopen, claude-sandbox detects when a container's config has drifted from `configurations.yml`, shows what changed, and offers to restart.
+
 ---
 
 ## How it works
 
 - **Per-project containers**: each project runs in a dedicated container named `claude-sandbox-<hash>` where the hash is derived from the project path. Running `claude-sandbox` in a project that is already open re-attaches VS Code without restarting the container or interrupting any running Claude session.
+- **Config drift**: each container records a snapshot of the config it was built from (a `claude-sandbox.config-snapshot` label). Reopening a project compares that snapshot to the current `configurations.yml`; if they differ it lists the changes and offers to restart. `claude-sandbox restart` applies changes on demand.
 - **Project mount**: your current folder binds to `/workspace/<project-name>`. Each project gets a unique path so `claude -r` sessions stay scoped correctly.
 - **Claude auth**: the `claude-config` named volume holds your subscription login — it is shared across all project containers.
 - **Persistent caches**: named Docker volumes keep Cargo, npm, Solana config, and the VS Code Server across restarts and image rebuilds. All project containers share these caches.

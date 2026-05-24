@@ -177,6 +177,91 @@ function _sandbox_container_name
     echo "claude-sandbox-$hash"
 end
 
+function _sandbox_render_config
+    # Usage: _sandbox_render_config <project_path>
+    # Emits a canonical, sorted snapshot of the effective container config as
+    # tab-delimited "category<TAB>value" lines. Single source of truth for drift
+    # detection. Must mirror the args _sandbox_docker_run actually applies.
+    set -l f (_sandbox_config_file)
+    test -f $f; or return
+    set -l p $argv[1]
+
+    # image (single value; project overrides global; default claude-sandbox)
+    set -l image (yq -r --arg p $p \
+        '(.projects[$p].container.image // .global.container.image // "claude-sandbox")' $f 2>/dev/null)
+    printf 'image\t%s\n' $image
+
+    # volumes: global then project, sorted
+    for vol in (yq -r --arg p $p \
+        '((.global.container.volumes // []) + (.projects[$p].container.volumes // [])) | .[]' $f 2>/dev/null | sort)
+        printf 'volume\t%s\n' $vol
+    end
+
+    # security_opt: global then project, sorted
+    for opt in (yq -r --arg p $p \
+        '((.global.container.security_opt // []) + (.projects[$p].container.security_opt // [])) | .[]' $f 2>/dev/null | sort)
+        printf 'security_opt\t%s\n' $opt
+    end
+
+    # extra_hosts: global then project, sorted
+    for host in (yq -r --arg p $p \
+        '((.global.container.extra_hosts // []) + (.projects[$p].container.extra_hosts // [])) | .[]' $f 2>/dev/null | sort)
+        printf 'extra_host\t%s\n' $host
+    end
+
+    # git auth: emit each line only when _sandbox_docker_run would apply the arg
+    set -l auth_type (_sandbox_config_read_git_auth_type $p)
+    printf 'git_auth_type\t%s\n' $auth_type
+    if test "$auth_type" = ssh; or test "$auth_type" = pat
+        printf 'git_auth_path\t%s\n' (_sandbox_config_read_git_auth_path $p)
+    end
+    if test "$auth_type" = ssh
+        set -l prefer_ssh (_sandbox_config_read_git_auth_prefer_ssh $p)
+        if test "$prefer_ssh" = true
+            printf 'git_prefer_ssh\t%s\n' true
+        end
+    end
+    set -l id_name (_sandbox_config_read_git_auth_identity_name $p)
+    set -l id_email (_sandbox_config_read_git_auth_identity_email $p)
+    if test -n "$id_name"
+        printf 'git_identity_name\t%s\n' $id_name
+    end
+    if test -n "$id_email"
+        printf 'git_identity_email\t%s\n' $id_email
+    end
+end
+
+function _sandbox_config_diff
+    # Usage: _sandbox_config_diff <project_path> <container_name>
+    # Prints "  - category value" / "  + category value" lines for config changes.
+    # Returns 1 if there is any drift, 0 if identical.
+    set -l project_path $argv[1]
+    set -l container_name $argv[2]
+
+    set -l before (mktemp)
+    set -l after (mktemp)
+
+    # Stored snapshot (empty file if the label is absent — e.g. pre-feature containers)
+    docker inspect --format '{{ index .Config.Labels "claude-sandbox.config-snapshot" }}' $container_name 2>/dev/null \
+        | base64 -d 2>/dev/null | sort > $before
+    _sandbox_render_config $project_path | sort > $after
+
+    set -l drift 0
+    # Removed: present at creation, absent now
+    for line in (comm -23 $before $after)
+        printf '  - %s\n' (string replace \t ' ' -- $line)
+        set drift 1
+    end
+    # Added: present now, absent at creation
+    for line in (comm -13 $before $after)
+        printf '  + %s\n' (string replace \t ' ' -- $line)
+        set drift 1
+    end
+
+    rm -f $before $after
+    return $drift
+end
+
 function _sandbox_docker_run
     # Usage: _sandbox_docker_run <container_name> <project_path> <project_name>
     set -l container_name $argv[1]
@@ -235,6 +320,10 @@ function _sandbox_docker_run
 
     # Project workspace bind mount
     set args $args -v "$project_path:/workspace/$project_name"
+
+    # Config snapshot label for drift detection
+    set -l config_snapshot (_sandbox_render_config $project_path | base64 | tr -d '\n')
+    set args $args --label "claude-sandbox.config-snapshot=$config_snapshot"
 
     set args $args \
         --workdir /workspace/$project_name \
@@ -376,8 +465,10 @@ function _sandbox_git_auth_wizard
     end
 end
 
-function _sandbox_launch
-    # Usage: _sandbox_launch <project_path>
+function _sandbox_preflight
+    # Usage: _sandbox_preflight <project_path>
+    # Docker-running check, git-auth resolution (runs the wizard if unset),
+    # and credentials-file verification. Returns non-zero on any failure.
     set -l project_path $argv[1]
     set -l project_name (basename $project_path)
 
@@ -386,7 +477,6 @@ function _sandbox_launch
         return 1
     end
 
-    # Resolve git auth for this project
     set -l auth_type (_sandbox_config_read_git_auth_type $project_path)
     if test -z "$auth_type"
         _sandbox_git_auth_wizard $project_path $project_name
@@ -394,7 +484,6 @@ function _sandbox_launch
         set auth_type (_sandbox_config_read_git_auth_type $project_path)
     end
 
-    # Verify credentials file exists if configured
     if test "$auth_type" = ssh; or test "$auth_type" = pat
         set -l creds_path (_sandbox_expand_vars (_sandbox_config_read_git_auth_path $project_path))
         if not test -f $creds_path
@@ -403,21 +492,81 @@ function _sandbox_launch
             return 1
         end
     end
+end
 
-    set -l container_name (_sandbox_container_name $project_path)
+function _sandbox_attach
+    # Usage: _sandbox_attach <container_name> <project_name>
+    set -l container_name $argv[1]
+    set -l project_name $argv[2]
+    set -l container_json "{\"containerName\":\"/$container_name\"}"
+    set -l encoded (printf '%s' $container_json | xxd -p | tr -d '\n')
+    code --folder-uri "vscode-remote://attached-container+$encoded/workspace/$project_name"
+end
+
+function _sandbox_recreate
+    # Usage: _sandbox_recreate <container_name> <project_path> <project_name>
+    # Stops (if running) and removes (if present) any existing container, then
+    # creates a fresh one with current config. Returns _sandbox_docker_run's status.
+    set -l container_name $argv[1]
+    set -l project_path $argv[2]
+    set -l project_name $argv[3]
+
+    set -l st (docker inspect --format '{{.State.Status}}' $container_name 2>/dev/null)
+    if test "$st" = running; or test "$st" = paused; or test "$st" = restarting
+        docker stop $container_name > /dev/null
+        or return 1
+    end
+    if test -n "$st"
+        docker rm $container_name > /dev/null
+        or return 1
+    end
+    _sandbox_docker_run $container_name $project_path $project_name
+end
+
+function _sandbox_launch
+    # Usage: _sandbox_launch <project_path>
+    set -l PROJECT_PATH $argv[1]
+    set -l PROJECT_NAME (basename $PROJECT_PATH)
+
+    _sandbox_preflight $PROJECT_PATH; or return 1
+
+    set -l container_name (_sandbox_container_name $PROJECT_PATH)
     set -l container_status (docker inspect --format '{{.State.Status}}' $container_name 2>/dev/null)
+
+    # Detect config drift for a reusable existing container and offer to restart.
+    # Scoped to states the launch flow would otherwise reuse; transient states
+    # (restarting/removing/dead) keep their dedicated handling in the switch below.
+    if contains -- "$container_status" running exited created paused
+        set -l drift_lines (_sandbox_config_diff $PROJECT_PATH $container_name)
+        if test (count $drift_lines) -gt 0
+            echo "Configuration for $PROJECT_NAME has changed since this container was created:"
+            printf '%s\n' $drift_lines
+            echo ""
+            read -P "Restart the container to apply these changes? [Y/n] " answer
+            or set answer n
+            if test -z "$answer"; or string match -qi 'y*' -- $answer
+                echo "Restarting sandbox for $PROJECT_NAME..."
+                _sandbox_recreate $container_name $PROJECT_PATH $PROJECT_NAME
+                or begin
+                    echo "Error: Failed to recreate container."
+                    return 1
+                end
+                _sandbox_attach $container_name $PROJECT_NAME
+                return
+            end
+        end
+    end
 
     switch $container_status
         case running
-            echo "Attaching to running sandbox for $project_name..."
+            echo "Attaching to running sandbox for $PROJECT_NAME..."
         case exited created paused
-            echo "Starting sandbox for $project_name..."
+            echo "Starting sandbox for $PROJECT_NAME..."
             if not docker start $container_name 2>/dev/null
                 # Stopped containers can have stale bind-mount paths (e.g. after Docker Desktop
                 # restart). The container layer is stateless so it's safe to recreate.
                 echo "Start failed (stale container). Recreating..."
-                docker rm $container_name
-                _sandbox_docker_run $container_name $project_path $project_name
+                _sandbox_recreate $container_name $PROJECT_PATH $PROJECT_NAME
                 or begin
                     echo "Error: Failed to start container."
                     return 1
@@ -430,17 +579,15 @@ function _sandbox_launch
             echo "Container is being removed or dead; run 'claude-sandbox stop --rm' and retry."
             return 1
         case '*'
-            echo "Creating new sandbox for $project_name..."
-            _sandbox_docker_run $container_name $project_path $project_name
+            echo "Creating new sandbox for $PROJECT_NAME..."
+            _sandbox_docker_run $container_name $PROJECT_PATH $PROJECT_NAME
             or begin
                 echo "Error: Failed to create container."
                 return 1
             end
     end
 
-    set -l container_json "{\"containerName\":\"/$container_name\"}"
-    set -l encoded (printf '%s' $container_json | xxd -p | tr -d '\n')
-    code --folder-uri "vscode-remote://attached-container+$encoded/workspace/$project_name"
+    _sandbox_attach $container_name $PROJECT_NAME
 end
 
 function claude-sandbox
@@ -457,6 +604,7 @@ function claude-sandbox
         printf "  %-34s%s\n" "stop [--rm]"           "Stop this project's container; --rm also removes it"
         printf "  %-34s%s\n" "list"                  "List all sandbox containers"
         printf "  %-34s%s\n" "open <target>"         "Open VS Code for a sandbox by path or container name"
+        printf "  %-34s%s\n" "restart <target>"      "Recreate a sandbox with current config and reattach"
         printf "  %-34s%s\n" "git-auth <action>"     "Manage per-project git auth"
         printf "  %-34s%s\n" "mounts <action>"       "Manage per-project volume entries"
         printf "  %-34s%s\n" "global mounts <action>" "Manage always-on global volume entries"
@@ -672,10 +820,11 @@ function claude-sandbox
             echo "  <target> may be either:"
             echo "    - A project path (absolute or relative). Creates and starts a"
             echo "      container if one does not exist for that path."
-            echo "    - A container name (e.g. claude-sandbox-abc12345) from"
-            echo "      'claude-sandbox list'. Must already exist."
+            echo "    - A container name (e.g. claude-sandbox-abc12345) or its"
+            echo "      bare hash (abc12345) from 'claude-sandbox list'. Must"
+            echo "      already exist."
             echo ""
-            echo "  Tab completion suggests both forms for every existing sandbox."
+            echo "  Tab completion lists the hash and path for every existing sandbox."
             return 0
         end
         if test (count $argv) -lt 2
@@ -684,11 +833,15 @@ function claude-sandbox
         end
         set -l target $argv[2]
 
-        # Try as container name first: must exist AND carry our label.
-        set -l labeled_path (docker inspect --format '{{ index .Config.Labels "claude-sandbox.project" }}' $target 2>/dev/null)
-        if test -n "$labeled_path"
-            _sandbox_launch $labeled_path
-            return
+        # Try as a container reference first: either the full name
+        # (claude-sandbox-abc12345) or the bare hash (abc12345) that tab
+        # completion inserts. Must exist AND carry our label.
+        for ref in $target claude-sandbox-$target
+            set -l labeled_path (docker inspect --format '{{ index .Config.Labels "claude-sandbox.project" }}' $ref 2>/dev/null)
+            if test -n "$labeled_path"
+                _sandbox_launch $labeled_path
+                return
+            end
         end
 
         # Fall back to path mode.
@@ -698,6 +851,86 @@ function claude-sandbox
             return 1
         end
         _sandbox_launch $resolved
+        return
+    end
+
+    # --- restart subcommand ---
+    if test (count $argv) -gt 0; and test $argv[1] = restart
+        if contains -- --help $argv
+            echo "Usage: claude-sandbox restart <target>"
+            echo ""
+            echo "  Recreates a sandbox container with the current configuration and"
+            echo "  reattaches VS Code. Use this to apply configuration changes"
+            echo "  (e.g. 'claude-sandbox mounts add') to an existing container."
+            echo ""
+            echo "  <target> may be either:"
+            echo "    - A project path (absolute or relative)."
+            echo "    - A container name (e.g. claude-sandbox-abc12345) or its"
+            echo "      bare hash (abc12345) from 'claude-sandbox list'."
+            echo ""
+            echo "  Any existing container for the target is stopped and removed first;"
+            echo "  this ends any running Claude session in that container. If no"
+            echo "  container exists for a path target, you are prompted before one"
+            echo "  is created."
+            return 0
+        end
+        if test (count $argv) -lt 2
+            echo "Usage: claude-sandbox restart <target>"
+            return 1
+        end
+        set -l target $argv[2]
+
+        # Resolve target like 'open': container reference first (full name or bare
+        # hash that tab completion inserts), then fall back to a project path.
+        set -l resolved
+        for ref in $target claude-sandbox-$target
+            set -l labeled_path (docker inspect --format '{{ index .Config.Labels "claude-sandbox.project" }}' $ref 2>/dev/null)
+            if test -n "$labeled_path"
+                set resolved $labeled_path
+                break
+            end
+        end
+        if test -z "$resolved"
+            set resolved (realpath $target 2>/dev/null)
+            if test -z "$resolved"
+                echo "Error: '$target' is neither an existing sandbox container nor a valid path."
+                return 1
+            end
+        end
+
+        set -l project_name (basename $resolved)
+        set -l container_name (_sandbox_container_name $resolved)
+
+        set -l rs_status (docker inspect --format '{{.State.Status}}' $container_name 2>/dev/null)
+        if test -n "$rs_status"
+            # Existing container: show what will change (for transparency), then recreate.
+            _sandbox_preflight $resolved; or return 1
+            set -l drift_lines (_sandbox_config_diff $resolved $container_name)
+            if test (count $drift_lines) -gt 0
+                echo "Applying configuration changes to $project_name:"
+                printf '%s\n' $drift_lines
+            end
+            echo "Restarting sandbox for $project_name..."
+        else
+            # No container yet: confirm before creating (default No). Run preflight
+            # (which may launch the git-auth wizard) only after the user confirms, so
+            # declining never writes auth config for a project we don't create.
+            read -P "No sandbox exists for $resolved. Create one? [y/N] " answer
+            or set answer n
+            if not string match -qi 'y*' -- $answer
+                echo "Aborted."
+                return 1
+            end
+            _sandbox_preflight $resolved; or return 1
+            echo "Creating new sandbox for $project_name..."
+        end
+
+        _sandbox_recreate $container_name $resolved $project_name
+        or begin
+            echo "Error: Failed to recreate container."
+            return 1
+        end
+        _sandbox_attach $container_name $project_name
         return
     end
 
