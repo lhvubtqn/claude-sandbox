@@ -76,8 +76,19 @@ Use `claude-sandbox restart <path-or-container>` to recreate a container with th
 | `solana-config` | `/root/.config/solana` | Solana keypairs and config |
 | `vscode-server` | `/home/claude/.vscode-server` | VS Code Server (survives restarts) |
 | `claude-config` | `/home/claude/.claude` | Claude Code auth, config, and session |
+| `npm-globals` | `/home/claude/.npm-globals` | Globally-installed npm packages (`npm install -g`) |
 | `~/.gitconfig` (bind, ro) | `/home/claude/.gitconfig` | Git identity from the host |
 | `<repo>/skills/` (bind, ro) | `/home/claude/.claude/skills/` | Custom Claude Code skills, version-controlled in this repo |
 | `<repo>/rules/` (bind, ro) | `/home/claude/.claude/rules/` | Global Claude Code rules, version-controlled in this repo |
 | SSH deploy key (bind, ro) | `/home/claude/.ssh/deploy_key` | Per-project SSH deploy key |
 | `$PROJECT_PATH` (bind) | `/workspace/$PROJECT_NAME` | Your project files |
+
+## Upgrading
+
+After pulling new commits that introduce additional named volumes, your existing `configurations.yml` does not pick them up automatically (the template only seeds the config file on first install). Apply the new `npm-globals` volume to existing installs with:
+
+```bash
+claude-sandbox global mounts add npm-globals:/home/claude/.npm-globals
+```
+
+The next time you open or restart a project, `claude-sandbox` will detect the config drift, show the new entry, and offer to recreate the container. Accept the restart and `npm install -g` results will persist from then on.
