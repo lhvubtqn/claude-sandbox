@@ -31,7 +31,7 @@ ENV HOME=/home/claude
 
 # Pre-create dirs that are backed by named volumes — Docker initializes a named
 # volume from the image only if the volume is empty, so ownership must be set here.
-RUN mkdir -p /home/claude/.vscode-server /home/claude/.ssh && \
+RUN mkdir -p /home/claude/.vscode-server /home/claude/.ssh /home/claude/.npm-globals && \
     chmod 700 /home/claude/.ssh
 
 # Rust, Solana CLI, Anchor, Node.js, Yarn — official all-in-one install
@@ -39,7 +39,8 @@ RUN curl --proto '=https' --tlsv1.2 -sSfL https://solana-install.solana.workers.
 
 # Bake all tool paths into every process (login shell not required)
 ENV NVM_DIR=/home/claude/.nvm
-ENV PATH="/home/claude/.cargo/bin:/home/claude/.local/share/solana/install/active_release/bin:/home/claude/.avm/bin:/home/claude/.local/bin:/home/claude/.nvm/default-node-bin:${PATH}"
+ENV NPM_CONFIG_PREFIX=/home/claude/.npm-globals
+ENV PATH="/home/claude/.cargo/bin:/home/claude/.local/share/solana/install/active_release/bin:/home/claude/.avm/bin:/home/claude/.local/bin:/home/claude/.npm-globals/bin:/home/claude/.nvm/default-node-bin:${PATH}"
 
 # Create a stable /home/claude/.nvm/default-node-bin symlink that points to
 # whichever node version NVM just installed as default. No root needed.
