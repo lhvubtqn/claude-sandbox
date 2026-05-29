@@ -12,6 +12,7 @@ global:
       - cargo-git:/home/claude/.cargo/git
       - rustup-downloads:/home/claude/.rustup/downloads
       - npm-cache:/home/claude/.npm
+      - npm-globals:/home/claude/.npm-globals
       - solana-config:/home/claude/.config/solana
       - vscode-server:/home/claude/.vscode-server
 
