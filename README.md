@@ -85,10 +85,11 @@ Use `claude-sandbox restart <path-or-container>` to recreate a container with th
 
 ## Upgrading
 
-After pulling new commits that introduce additional named volumes, your existing `configurations.yml` does not pick them up automatically (the template only seeds the config file on first install). Apply the new `npm-globals` volume to existing installs with:
+After pulling new commits that introduce additional named volumes, your existing `configurations.yml` does not pick them up automatically (the template only seeds the config file on first install). For `npm-globals` specifically, the new env vars (`NPM_CONFIG_PREFIX`, `PATH` entry) also live in the Docker image, so you need both an image rebuild and a config update.
 
 ```bash
-claude-sandbox global mounts add npm-globals:/home/claude/.npm-globals
+make install                                                       # rebuild the image
+claude-sandbox global mounts add npm-globals:/home/claude/.npm-globals  # opt the global config into the new volume
 ```
 
 The next time you open or restart a project, `claude-sandbox` will detect the config drift, show the new entry, and offer to recreate the container. Accept the restart and `npm install -g` results will persist from then on.
