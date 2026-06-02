@@ -44,7 +44,7 @@ ENV PATH="/home/claude/.cargo/bin:/home/claude/.local/share/solana/install/activ
 
 # Create a stable /home/claude/.nvm/default-node-bin symlink that points to
 # whichever node version NVM just installed as default. No root needed.
-RUN bash -c "source $NVM_DIR/nvm.sh && \
+RUN bash -c "unset NPM_CONFIG_PREFIX; source $NVM_DIR/nvm.sh && \
     nvm alias default node && \
     ln -sf \$(dirname \$(nvm which default)) $NVM_DIR/default-node-bin"
 
