@@ -675,8 +675,13 @@ function claude-sandbox
         printf "  %-34s%s\n" "open <target>"         "Open VS Code for a sandbox by path or container name"
         printf "  %-34s%s\n" "restart <target>"      "Recreate a sandbox with current config and reattach"
         printf "  %-34s%s\n" "git-auth <action>"     "Manage per-project git auth"
-        printf "  %-34s%s\n" "mounts <action>"       "Manage per-project volume entries"
-        printf "  %-34s%s\n" "global mounts <action>" "Manage always-on global volume entries"
+        printf "  %-34s%s\n" "mounts <action>"       "Manage current project's volume entries"
+        printf "  %-34s%s\n" "-g mounts <action>"    "Manage always-on global volume entries"
+        echo ""
+        echo "Global flags (before the subcommand):"
+        printf "  %-34s%s\n" "-p, --project <id|path>" "Target another project (path, container hash, or name)"
+        printf "  %-34s%s\n" ""                        "Applies to: mounts, git-auth, open, restart, stop"
+        printf "  %-34s%s\n" "-g, --global"            "Operate on global config (mounts only)"
         echo ""
         echo "Run 'claude-sandbox <subcommand> --help' for subcommand usage."
         return 0
@@ -784,13 +789,15 @@ function claude-sandbox
     if test (count $argv) -gt 0; and test $argv[1] = mounts
         set -l action $argv[2]
         if contains -- --help $argv
-            echo "Usage: claude-sandbox mounts {add <spec>|remove <spec>|list|clear}"
+            echo "Usage: claude-sandbox [-p <project>|-g] mounts {add <spec>|remove <spec>|list|clear}"
             echo ""
-            printf "  %-24s%s\n" "add <spec>"    "Add a volume entry for current project"
+            printf "  %-24s%s\n" "add <spec>"    "Add a volume entry"
             printf "  %-24s%s\n" "remove <spec>" "Remove a volume entry"
-            printf "  %-24s%s\n" "list"          "Show all volume entries for current project"
-            printf "  %-24s%s\n" "clear"         "Remove all volume entries for current project"
+            printf "  %-24s%s\n" "list"          "Show all volume entries"
+            printf "  %-24s%s\n" "clear"         "Remove all volume entries"
             echo ""
+            echo "  Target: current project (default), another project (-p <id|path>),"
+            echo "          or always-on global volumes (-g)."
             echo "  <spec> format: <host-path>:<container-path>[:<options>]"
             echo "  Supports \${WORKDIR}, \${HOME}, and ~ in host paths."
             return 0
