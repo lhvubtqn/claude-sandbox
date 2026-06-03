@@ -46,8 +46,13 @@ Runs Claude with full permissions (`claude --dangerously-skip-permissions`).
 
 ```bash
 claude-sandbox --help
-claude-sandbox global --help
+claude-sandbox -g mounts --help
+claude-sandbox -p <id|path> mounts --help
 ```
+
+Use `-p/--project <id|path>` before any of `mounts`, `git-auth`, `open`,
+`restart`, or `stop` to target another project (by path, container hash, or
+name). Use `-g` before `mounts` to manage the always-on global volumes.
 
 Use `claude-sandbox open <path-or-container>` from anywhere to attach VS Code to a sandbox. Tab completion lists every existing container's path and hash.
 
@@ -89,7 +94,7 @@ After pulling new commits that introduce additional named volumes, your existing
 
 ```bash
 make install                                                       # rebuild the image
-claude-sandbox global mounts add npm-globals:/home/claude/.npm-globals  # opt the global config into the new volume
+claude-sandbox -g mounts add npm-globals:/home/claude/.npm-globals  # opt the global config into the new volume
 ```
 
 The next time you open or restart a project, `claude-sandbox` will detect the config drift, show the new entry, and offer to recreate the container. Accept the restart and `npm install -g` results will persist from then on.
