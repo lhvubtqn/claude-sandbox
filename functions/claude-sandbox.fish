@@ -171,6 +171,29 @@ function _sandbox_expand_vars
     echo $result
 end
 
+function _sandbox_resolve_target
+    # Usage: _sandbox_resolve_target <value>
+    # Resolves a project path from a value that may be a container hash, a full
+    # container name, or a filesystem path. Container refs resolve via the
+    # claude-sandbox.project label (the container must exist); a path falls back
+    # to realpath and is valid even when no container exists yet.
+    # Echoes the absolute path and returns 0, or echoes nothing and returns 1.
+    set -l value $argv[1]
+    for ref in $value claude-sandbox-$value
+        set -l labeled_path (docker inspect --format '{{ index .Config.Labels "claude-sandbox.project" }}' $ref 2>/dev/null)
+        if test -n "$labeled_path"
+            echo $labeled_path
+            return 0
+        end
+    end
+    set -l resolved (realpath $value 2>/dev/null)
+    if test -n "$resolved"
+        echo $resolved
+        return 0
+    end
+    return 1
+end
+
 function _sandbox_container_name
     # Usage: _sandbox_container_name <absolute_project_path>
     set -l hash (printf '%s' $argv[1] | sha256sum | cut -c1-8)
@@ -832,20 +855,7 @@ function claude-sandbox
             return 1
         end
         set -l target $argv[2]
-
-        # Try as a container reference first: either the full name
-        # (claude-sandbox-abc12345) or the bare hash (abc12345) that tab
-        # completion inserts. Must exist AND carry our label.
-        for ref in $target claude-sandbox-$target
-            set -l labeled_path (docker inspect --format '{{ index .Config.Labels "claude-sandbox.project" }}' $ref 2>/dev/null)
-            if test -n "$labeled_path"
-                _sandbox_launch $labeled_path
-                return
-            end
-        end
-
-        # Fall back to path mode.
-        set -l resolved (realpath $target 2>/dev/null)
+        set -l resolved (_sandbox_resolve_target $target)
         if test -z "$resolved"
             echo "Error: '$target' is neither an existing sandbox container nor a valid path."
             return 1
@@ -882,20 +892,10 @@ function claude-sandbox
 
         # Resolve target like 'open': container reference first (full name or bare
         # hash that tab completion inserts), then fall back to a project path.
-        set -l resolved
-        for ref in $target claude-sandbox-$target
-            set -l labeled_path (docker inspect --format '{{ index .Config.Labels "claude-sandbox.project" }}' $ref 2>/dev/null)
-            if test -n "$labeled_path"
-                set resolved $labeled_path
-                break
-            end
-        end
+        set -l resolved (_sandbox_resolve_target $target)
         if test -z "$resolved"
-            set resolved (realpath $target 2>/dev/null)
-            if test -z "$resolved"
-                echo "Error: '$target' is neither an existing sandbox container nor a valid path."
-                return 1
-            end
+            echo "Error: '$target' is neither an existing sandbox container nor a valid path."
+            return 1
         end
 
         set -l project_name (basename $resolved)
