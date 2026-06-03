@@ -617,6 +617,52 @@ function claude-sandbox
     set -l PROJECT_PATH (pwd)
     set -l PROJECT_NAME (basename $PROJECT_PATH)
 
+    # --- leading project/global selector flags (must precede the subcommand) ---
+    set -l target_path $PROJECT_PATH
+    set -l global_mode 0
+    set -l project_flag 0
+    set -l _subcmds stop list open restart git-auth mounts
+    while test (count $argv) -gt 0
+        switch $argv[1]
+            case -p --project
+                if test (count $argv) -lt 2; or contains -- $argv[2] $_subcmds
+                    echo "Error: -p requires a project path or container reference."
+                    return 1
+                end
+                set project_flag 1
+                set -l resolved (_sandbox_resolve_target $argv[2])
+                if test -z "$resolved"
+                    echo "Error: '$argv[2]' is neither an existing sandbox container nor a valid path."
+                    return 1
+                end
+                set target_path $resolved
+                set -e argv[2]
+                set -e argv[1]
+            case -g --global
+                set global_mode 1
+                set -e argv[1]
+            case '*'
+                break
+        end
+    end
+    set -l target_name (basename $target_path)
+
+    # Flag-combination validation
+    if test $global_mode -eq 1; and test $project_flag -eq 1
+        echo "Error: -g and -p are mutually exclusive."
+        return 1
+    end
+    if test $global_mode -eq 1
+        if test (count $argv) -eq 0; or test "$argv[1]" != mounts
+            echo "Error: -g is only valid with 'mounts'."
+            return 1
+        end
+    end
+    if test $project_flag -eq 1; and test (count $argv) -gt 0; and test "$argv[1]" = list
+        echo "Error: list is cross-project; -p/-g not applicable."
+        return 1
+    end
+
     # --- top-level --help ---
     if contains -- --help $argv; and test (count $argv) -eq 1
         echo "Usage: claude-sandbox [--help]"
@@ -634,56 +680,6 @@ function claude-sandbox
         echo ""
         echo "Run 'claude-sandbox <subcommand> --help' for subcommand usage."
         return 0
-    end
-
-    # --- global subcommand ---
-    if test (count $argv) -gt 0; and test $argv[1] = global
-        if contains -- --help $argv
-            echo "Usage: claude-sandbox global mounts {add <spec>|remove <spec>|list|clear}"
-            echo ""
-            printf "  %-24s%s\n" "add <spec>"    "Add a volume entry applied to every container"
-            printf "  %-24s%s\n" "remove <spec>" "Remove a global volume entry"
-            printf "  %-24s%s\n" "list"          "Show all global volume entries"
-            printf "  %-24s%s\n" "clear"         "Remove all global volume entries"
-            return 0
-        end
-        if test (count $argv) -lt 3; or test "$argv[2]" != mounts
-            echo "Usage: claude-sandbox global mounts {add <spec>|remove <spec>|list|clear}"
-            return 1
-        end
-        set -l action $argv[3]
-        switch $action
-            case add
-                if test (count $argv) -lt 4
-                    echo "Usage: claude-sandbox global mounts add <source>:<target>[:<options>]"
-                    return 1
-                end
-                _sandbox_global_mounts_add $argv[4]
-                echo "Added global mount: $argv[4]"
-            case remove
-                if test (count $argv) -lt 4
-                    echo "Usage: claude-sandbox global mounts remove <source>:<target>[:<options>]"
-                    return 1
-                end
-                _sandbox_global_mounts_remove $argv[4]
-                echo "Removed global mount: $argv[4]"
-            case list
-                set -l mounts (_sandbox_global_mounts_list)
-                if test (count $mounts) -eq 0
-                    echo "No global mounts configured"
-                else
-                    for m in $mounts
-                        echo $m
-                    end
-                end
-            case clear
-                _sandbox_global_mounts_clear
-                echo "Cleared all global mounts"
-            case '*'
-                echo "Usage: claude-sandbox global mounts {add <spec>|remove <spec>|list|clear}"
-                return 1
-        end
-        return
     end
 
     # --- stop subcommand ---
@@ -802,32 +798,58 @@ function claude-sandbox
         switch $action
             case add
                 if test (count $argv) -lt 3
-                    echo "Usage: claude-sandbox mounts add <source>:<target>[:<options>]"
+                    echo "Usage: claude-sandbox [-p <project>|-g] mounts add <source>:<target>[:<options>]"
                     return 1
                 end
-                _sandbox_mounts_add $PROJECT_PATH $argv[3]
-                echo "Added mount for $PROJECT_PATH: $argv[3]"
+                if test $global_mode -eq 1
+                    _sandbox_global_mounts_add $argv[3]
+                    echo "Added global mount: $argv[3]"
+                else
+                    _sandbox_mounts_add $target_path $argv[3]
+                    echo "Added mount for $target_path: $argv[3]"
+                end
             case remove
                 if test (count $argv) -lt 3
-                    echo "Usage: claude-sandbox mounts remove <source>:<target>[:<options>]"
+                    echo "Usage: claude-sandbox [-p <project>|-g] mounts remove <source>:<target>[:<options>]"
                     return 1
                 end
-                _sandbox_mounts_remove $PROJECT_PATH $argv[3]
-                echo "Removed mount for $PROJECT_PATH: $argv[3]"
-            case list
-                set -l mounts (_sandbox_mounts_list $PROJECT_PATH)
-                if test (count $mounts) -eq 0
-                    echo "No extra mounts configured for $PROJECT_PATH"
+                if test $global_mode -eq 1
+                    _sandbox_global_mounts_remove $argv[3]
+                    echo "Removed global mount: $argv[3]"
                 else
-                    for m in $mounts
-                        echo $m
+                    _sandbox_mounts_remove $target_path $argv[3]
+                    echo "Removed mount for $target_path: $argv[3]"
+                end
+            case list
+                if test $global_mode -eq 1
+                    set -l mounts (_sandbox_global_mounts_list)
+                    if test (count $mounts) -eq 0
+                        echo "No global mounts configured"
+                    else
+                        for m in $mounts
+                            echo $m
+                        end
+                    end
+                else
+                    set -l mounts (_sandbox_mounts_list $target_path)
+                    if test (count $mounts) -eq 0
+                        echo "No extra mounts configured for $target_path"
+                    else
+                        for m in $mounts
+                            echo $m
+                        end
                     end
                 end
             case clear
-                _sandbox_mounts_clear $PROJECT_PATH
-                echo "Cleared all mounts for $PROJECT_PATH"
+                if test $global_mode -eq 1
+                    _sandbox_global_mounts_clear
+                    echo "Cleared all global mounts"
+                else
+                    _sandbox_mounts_clear $target_path
+                    echo "Cleared all mounts for $target_path"
+                end
             case '*'
-                echo "Usage: claude-sandbox mounts {add <spec>|remove <spec>|list|clear}"
+                echo "Usage: claude-sandbox [-p <project>|-g] mounts {add <spec>|remove <spec>|list|clear}"
                 return 1
         end
         return
@@ -935,5 +957,5 @@ function claude-sandbox
     end
 
     # --- launch flow ---
-    _sandbox_launch $PROJECT_PATH
+    _sandbox_launch $target_path
 end
