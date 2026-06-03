@@ -872,6 +872,10 @@ function claude-sandbox
             echo "  Tab completion lists the hash and path for every existing sandbox."
             return 0
         end
+        if test $project_flag -eq 1
+            _sandbox_launch $target_path
+            return
+        end
         if test (count $argv) -lt 2
             echo "Usage: claude-sandbox open <target>"
             return 1
@@ -906,18 +910,19 @@ function claude-sandbox
             echo "  is created."
             return 0
         end
-        if test (count $argv) -lt 2
-            echo "Usage: claude-sandbox restart <target>"
-            return 1
-        end
-        set -l target $argv[2]
-
-        # Resolve target like 'open': container reference first (full name or bare
-        # hash that tab completion inserts), then fall back to a project path.
-        set -l resolved (_sandbox_resolve_target $target)
-        if test -z "$resolved"
-            echo "Error: '$target' is neither an existing sandbox container nor a valid path."
-            return 1
+        set -l resolved
+        if test $project_flag -eq 1
+            set resolved $target_path
+        else
+            if test (count $argv) -lt 2
+                echo "Usage: claude-sandbox restart <target>"
+                return 1
+            end
+            set resolved (_sandbox_resolve_target $argv[2])
+            if test -z "$resolved"
+                echo "Error: '$argv[2]' is neither an existing sandbox container nor a valid path."
+                return 1
+            end
         end
 
         set -l project_name (basename $resolved)
