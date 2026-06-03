@@ -37,6 +37,22 @@ RUN mkdir -p /home/claude/.vscode-server /home/claude/.ssh /home/claude/.npm-glo
 # Rust, Solana CLI, Anchor, Node.js, Yarn — official all-in-one install
 RUN curl --proto '=https' --tlsv1.2 -sSfL https://solana-install.solana.workers.dev | bash
 
+# The Solana installer added raw nvm init to ~/.bashrc. Patch it to temporarily
+# unset NPM_CONFIG_PREFIX (which nvm.sh rejects) and restore it after loading.
+RUN python3 - << 'EOF'
+import re
+path = '/home/claude/.bashrc'
+with open(path) as f:
+    text = f.read()
+text = re.sub(
+    r'(\[ -s "\$NVM_DIR/nvm\.sh" \] && \\?\. "\$NVM_DIR/nvm\.sh")(.*)',
+    '_p="${NPM_CONFIG_PREFIX:-}"; unset NPM_CONFIG_PREFIX; \\1\\2; [ -n "$_p" ] && export NPM_CONFIG_PREFIX="$_p"; unset _p',
+    text
+)
+with open(path, 'w') as f:
+    f.write(text)
+EOF
+
 # Bake all tool paths into every process (login shell not required)
 ENV NVM_DIR=/home/claude/.nvm
 ENV NPM_CONFIG_PREFIX=/home/claude/.npm-globals
