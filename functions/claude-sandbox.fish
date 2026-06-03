@@ -695,9 +695,9 @@ function claude-sandbox
         if contains -- --rm $argv
             set remove true
         end
-        set -l container_name (_sandbox_container_name $PROJECT_PATH)
+        set -l container_name (_sandbox_container_name $target_path)
         if not docker inspect $container_name > /dev/null 2>&1
-            echo "No container found for $PROJECT_PATH"
+            echo "No container found for $target_path"
             return 1
         end
         set -l stop_status (docker inspect --format '{{.State.Status}}' $container_name 2>/dev/null)
@@ -742,21 +742,21 @@ function claude-sandbox
         end
         switch $action
             case set
-                _sandbox_git_auth_wizard $PROJECT_PATH $PROJECT_NAME
+                _sandbox_git_auth_wizard $target_path $target_name
             case show
-                set -l t (_sandbox_config_read_git_auth_type $PROJECT_PATH)
+                set -l t (_sandbox_config_read_git_auth_type $target_path)
                 if test -z "$t"
-                    echo "No git auth configured for $PROJECT_PATH"
+                    echo "No git auth configured for $target_path"
                 else
                     echo "type: $t"
                     if test "$t" = ssh; or test "$t" = pat
-                        echo "path: "(_sandbox_config_read_git_auth_path $PROJECT_PATH)
+                        echo "path: "(_sandbox_config_read_git_auth_path $target_path)
                     end
                     if test "$t" = ssh
-                        echo "prefer_ssh: "(_sandbox_config_read_git_auth_prefer_ssh $PROJECT_PATH)
+                        echo "prefer_ssh: "(_sandbox_config_read_git_auth_prefer_ssh $target_path)
                     end
-                    set -l n (_sandbox_config_read_git_auth_identity_name $PROJECT_PATH)
-                    set -l e (_sandbox_config_read_git_auth_identity_email $PROJECT_PATH)
+                    set -l n (_sandbox_config_read_git_auth_identity_name $target_path)
+                    set -l e (_sandbox_config_read_git_auth_identity_email $target_path)
                     if test -n "$n"; or test -n "$e"
                         echo "identity:"
                         echo "  name: $n"
@@ -764,8 +764,8 @@ function claude-sandbox
                     end
                 end
             case clear
-                _sandbox_config_delete $PROJECT_PATH
-                echo "Cleared git auth for $PROJECT_PATH (will prompt on next launch)"
+                _sandbox_config_delete $target_path
+                echo "Cleared git auth for $target_path (will prompt on next launch)"
             case list
                 set -l f (_sandbox_config_file)
                 if not test -f $f
