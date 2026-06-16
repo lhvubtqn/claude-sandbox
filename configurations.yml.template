@@ -23,6 +23,19 @@ global:
 
 projects:
   ${WORKDIR}:
+    # GUI display backend for this project. `wslg` wires up the WSLg X11/Wayland
+    # sockets + display env and installs the needed runtime libs on first start
+    # (WSL hosts only). Default `none` keeps the sandbox headless and lean.
+    # Toggle with `claude-sandbox ui <mode>`; restart to apply.
+    ui_mode: none
+    # Per-project container overrides (merged with global). Both docker-compose
+    # env forms work (map or "- KEY=value" list); values support ${WORKDIR},
+    # ${HOME}, and leading ~/. Volumes can also use `claude-sandbox mounts add`.
+    # container:
+    #   volumes:
+    #     - /host/path:/container/path
+    #   environment:
+    #     KEY: value
     git_auth:
       type: ssh
       path: ${HOME}/.ssh/id_ed25519

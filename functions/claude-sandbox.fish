@@ -45,6 +45,30 @@ function _sandbox_config_read_git_auth_identity_email
     yq -r --arg p $argv[1] '.projects[$p].git_auth.identity.email // empty' $f 2>/dev/null
 end
 
+function _sandbox_config_read_ui_mode
+    # Returns the project's ui_mode, defaulting to "none". Raw value (validation
+    # happens where it's used, so a hand-edited typo fails loudly at launch).
+    set -l f (_sandbox_config_file)
+    test -f $f; or begin; echo none; return; end
+    yq -r --arg p $argv[1] '.projects[$p].ui_mode // "none"' $f 2>/dev/null
+end
+
+function _sandbox_config_write_ui_mode
+    # Usage: _sandbox_config_write_ui_mode <project_path> <mode>
+    # mode=none deletes the key to keep config tidy; any other value is stored.
+    set -l f (_sandbox_config_file)
+    test -f $f; or echo '{}' > $f
+    set -l tmp (mktemp)
+    if test "$argv[2]" = none
+        yq -y --arg p $argv[1] \
+            'if .projects[$p] then del(.projects[$p].ui_mode) else . end' $f > $tmp
+    else
+        yq -y --arg p $argv[1] --arg m $argv[2] \
+            '.projects[$p].ui_mode = $m' $f > $tmp
+    end
+    and mv $tmp $f
+end
+
 function _sandbox_config_write_git_auth_ssh
     # Usage: _sandbox_config_write_git_auth_ssh <project_path> <key_path>
     set -l f (_sandbox_config_file)
@@ -232,6 +256,20 @@ function _sandbox_render_config
         printf 'extra_host\t%s\n' $host
     end
 
+    # environment: global then project, sorted. Accepts docker-compose's map
+    # (KEY: value) or list (- KEY=value) form; both normalize to KEY=value.
+    for env in (yq -r --arg p $p \
+        'def norm: if type=="object" then (to_entries|map("\(.key)=\(.value)")) elif type=="array" then . else [] end; ((.global.container.environment | norm) + (.projects[$p].container.environment | norm)) | .[]' $f 2>/dev/null | sort)
+        printf 'environment\t%s\n' $env
+    end
+
+    # ui_mode: emit only when a GUI backend is selected, so toggling it (or its
+    # derived mounts/env) registers as drift and offers a restart.
+    set -l ui_mode (_sandbox_config_read_ui_mode $p)
+    if test "$ui_mode" != none
+        printf 'ui_mode\t%s\n' $ui_mode
+    end
+
     # git auth: emit each line only when _sandbox_docker_run would apply the arg
     set -l auth_type (_sandbox_config_read_git_auth_type $p)
     printf 'git_auth_type\t%s\n' $auth_type
@@ -311,6 +349,37 @@ function _sandbox_docker_run
     for host in (yq -r --arg p $project_path \
         '((.global.container.extra_hosts // []) + (.projects[$p].container.extra_hosts // [])) | .[]' $f 2>/dev/null)
         set args $args --add-host $host
+    end
+
+    # environment: global then project (docker-compose map or list form),
+    # with variable expansion so values like ${HOME} resolve.
+    for env in (yq -r --arg p $project_path \
+        'def norm: if type=="object" then (to_entries|map("\(.key)=\(.value)")) elif type=="array" then . else [] end; ((.global.container.environment | norm) + (.projects[$p].container.environment | norm)) | .[]' $f 2>/dev/null)
+        set args $args -e (_sandbox_expand_vars $env)
+    end
+
+    # ui_mode: wire up a display backend when configured. The entrypoint reads
+    # SANDBOX_UI_MODE and installs any missing runtime libs on first start.
+    set -l ui_mode (_sandbox_config_read_ui_mode $project_path)
+    switch $ui_mode
+        case none
+            # no GUI plumbing
+        case wslg
+            if not uname -r | grep -qi microsoft
+                echo "Error: ui_mode 'wslg' requires a WSL host (WSLg display server)." >&2
+                echo "       Set 'ui_mode: none' for $project_path on this host." >&2
+                return 1
+            end
+            set args $args -v /tmp/.X11-unix:/tmp/.X11-unix
+            set args $args -v /mnt/wslg:/mnt/wslg
+            set args $args -e DISPLAY=:0
+            set args $args -e WAYLAND_DISPLAY=wayland-0
+            set args $args -e XDG_RUNTIME_DIR=/mnt/wslg/runtime-dir
+            set args $args -e PULSE_SERVER=/mnt/wslg/PulseServer
+            set args $args -e SANDBOX_UI_MODE=wslg
+        case '*'
+            echo "Error: unknown ui_mode '$ui_mode' for $project_path (valid: none, wslg)." >&2
+            return 1
     end
 
     # volumes: global then project, with variable expansion
@@ -621,7 +690,7 @@ function claude-sandbox
     set -l target_path $PROJECT_PATH
     set -l global_mode 0
     set -l project_flag 0
-    set -l _subcmds stop list open restart git-auth mounts
+    set -l _subcmds stop list open restart git-auth mounts ui
     while test (count $argv) -gt 0
         switch $argv[1]
             case -p --project
@@ -677,10 +746,11 @@ function claude-sandbox
         printf "  %-34s%s\n" "git-auth <action>"     "Manage per-project git auth"
         printf "  %-34s%s\n" "mounts <action>"       "Manage current project's volume entries"
         printf "  %-34s%s\n" "-g mounts <action>"    "Manage always-on global volume entries"
+        printf "  %-34s%s\n" "ui [<mode>]"           "Show/set GUI display backend (none|wslg)"
         echo ""
         echo "Global flags (before the subcommand):"
         printf "  %-34s%s\n" "-p, --project <id|path>" "Target another project (path, container hash, or name)"
-        printf "  %-34s%s\n" ""                        "Applies to: mounts, git-auth, open, restart, stop"
+        printf "  %-34s%s\n" ""                        "Applies to: mounts, git-auth, open, restart, stop, ui"
         printf "  %-34s%s\n" "-g, --global"            "Operate on global config (mounts only)"
         echo ""
         echo "Run 'claude-sandbox <subcommand> --help' for subcommand usage."
@@ -857,6 +927,38 @@ function claude-sandbox
                 end
             case '*'
                 echo "Usage: claude-sandbox [-p <project>|-g] mounts {add <spec>|remove <spec>|list|clear}"
+                return 1
+        end
+        return
+    end
+
+    # --- ui subcommand ---
+    if test (count $argv) -gt 0; and test $argv[1] = ui
+        if contains -- --help $argv
+            echo "Usage: claude-sandbox [-p <project>] ui [<mode>]"
+            echo ""
+            echo "  Show or set the GUI display backend for a project."
+            echo ""
+            printf "  %-12s%s\n" "(no mode)" "Print the current ui_mode"
+            printf "  %-12s%s\n" "none"      "Disable GUI plumbing (default)"
+            printf "  %-12s%s\n" "wslg"      "WSLg sockets + display env + auto lib install (WSL only)"
+            echo ""
+            echo "  Apply changes to an existing container with 'claude-sandbox restart'."
+            return 0
+        end
+        if test (count $argv) -lt 2
+            echo "ui_mode: "(_sandbox_config_read_ui_mode $target_path)
+            return
+        end
+        switch $argv[2]
+            case none wslg
+                _sandbox_config_write_ui_mode $target_path $argv[2]
+                echo "Set ui_mode for $target_path: $argv[2]"
+                if test "$argv[2]" != none
+                    echo "Run 'claude-sandbox restart' to apply."
+                end
+            case '*'
+                echo "Error: invalid ui_mode '$argv[2]' (valid: none, wslg)."
                 return 1
         end
         return

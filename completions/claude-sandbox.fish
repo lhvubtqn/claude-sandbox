@@ -4,7 +4,7 @@
 # stale completions (e.g. when $subcommands changes between versions).
 complete -c claude-sandbox -e
 
-set -l subcommands stop list open restart git-auth mounts
+set -l subcommands stop list open restart git-auth mounts ui
 
 # No file completion at top level
 complete -c claude-sandbox -f
@@ -31,6 +31,9 @@ complete -c claude-sandbox \
 complete -c claude-sandbox \
     -n "not __fish_seen_subcommand_from $subcommands" \
     -a mounts -d 'Manage per-project volume entries'
+complete -c claude-sandbox \
+    -n "not __fish_seen_subcommand_from $subcommands; and not __fish_seen_argument -s g -l global" \
+    -a ui -d 'Show/set GUI display backend (none|wslg)'
 
 # Leading selector flags (offered before a subcommand is chosen).
 # -p takes a required argument: an existing container (hash/path) or any directory.
@@ -125,4 +128,16 @@ complete -c claude-sandbox \
     -a clear  -d 'Clear all volume entries'
 complete -c claude-sandbox \
     -n "__fish_seen_subcommand_from mounts" \
+    -l help -d 'Show usage'
+
+# ui modes
+set -l ui_modes none wslg
+complete -c claude-sandbox -f \
+    -n "__fish_seen_subcommand_from ui; and not __fish_seen_subcommand_from $ui_modes" \
+    -a none -d 'Disable GUI plumbing (default)'
+complete -c claude-sandbox -f \
+    -n "__fish_seen_subcommand_from ui; and not __fish_seen_subcommand_from $ui_modes" \
+    -a wslg -d 'WSLg sockets + display env + auto lib install (WSL only)'
+complete -c claude-sandbox \
+    -n "__fish_seen_subcommand_from ui" \
     -l help -d 'Show usage'

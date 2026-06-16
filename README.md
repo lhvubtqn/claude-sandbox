@@ -51,12 +51,63 @@ claude-sandbox -p <id|path> mounts --help
 ```
 
 Use `-p/--project <id|path>` before any of `mounts`, `git-auth`, `open`,
-`restart`, or `stop` to target another project (by path, container hash, or
-name). Use `-g` before `mounts` to manage the always-on global volumes.
+`restart`, `stop`, or `ui` to target another project (by path, container hash,
+or name). Use `-g` before `mounts` to manage the always-on global volumes.
 
 Use `claude-sandbox open <path-or-container>` from anywhere to attach VS Code to a sandbox. Tab completion lists every existing container's path and hash.
 
 Use `claude-sandbox restart <path-or-container>` to recreate a container with the current config — the way to apply changes from `claude-sandbox mounts add` and friends. On reopen, claude-sandbox detects when a container's config has drifted from `configurations.yml`, shows what changed, and offers to restart.
+
+### Environment variables
+
+The `container:` block accepts an `environment:` key, passed to the container as
+`docker run -e`. Both docker-compose forms work — a map or a `- KEY=value` list
+— and values expand `${WORKDIR}`, `${HOME}`, and leading `~/`. There is no
+`mounts`-style CLI helper, so edit `configurations.yml` directly and
+`claude-sandbox restart` to apply.
+
+Define it **under a project** to scope it to that sandbox only (e.g. GUI
+plumbing you don't want enabled for every container); putting it under `global`
+would apply it to all containers. Global and per-project entries are merged.
+
+```yaml
+projects:
+  /home/you/my-app:
+    container:
+      environment:
+        MY_VAR: hello
+```
+
+Like volumes, env entries participate in config-drift detection.
+
+### GUI apps (WSLg)
+
+To run a desktop app (Godot editor, Electron, GTK/Qt) inside a sandbox, set
+`ui_mode: wslg` on that project — it sits at the project level, alongside
+`git_auth`:
+
+```bash
+claude-sandbox ui wslg      # set ui_mode: wslg for the current project
+claude-sandbox restart      # apply it
+claude-sandbox ui           # print the current mode
+claude-sandbox ui none      # back to headless
+```
+
+When `wslg` is set, launching the container automatically:
+
+- mounts the host WSLg sockets (`/tmp/.X11-unix`, `/mnt/wslg`),
+- sets the display env (`DISPLAY`, `WAYLAND_DISPLAY`, `XDG_RUNTIME_DIR`,
+  `PULSE_SERVER` for audio), and
+- has the entrypoint install the GUI runtime libraries (X11/Wayland/GL/audio) —
+  only the ones actually missing, so warm starts stay fast.
+
+Because the libs are installed at container start (not baked into the image),
+the headless base image stays lean for every other sandbox. The trade-off: a
+fresh container's first boot with `ui_mode: wslg` spends ~30–60s installing
+libs. The mode is **WSL-only** — on a non-WSL host the launcher refuses to start
+the container and tells you to set `ui_mode: none`. Toggling `ui_mode`
+participates in config-drift detection, so an open project will offer to restart
+when you change it.
 
 ---
 
