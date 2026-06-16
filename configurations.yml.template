@@ -13,6 +13,7 @@ global:
       - rustup-downloads:/home/claude/.rustup/downloads
       - npm-cache:/home/claude/.npm
       - npm-globals:/home/claude/.npm-globals
+      - pipx:/home/claude/.pipx
       - solana-config:/home/claude/.config/solana
       - vscode-server:/home/claude/.vscode-server
 

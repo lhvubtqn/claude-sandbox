@@ -82,6 +82,7 @@ Use `claude-sandbox restart <path-or-container>` to recreate a container with th
 | `vscode-server` | `/home/claude/.vscode-server` | VS Code Server (survives restarts) |
 | `claude-config` | `/home/claude/.claude` | Claude Code auth, config, and session |
 | `npm-globals` | `/home/claude/.npm-globals` | Globally-installed npm packages (`npm install -g`) |
+| `pipx` | `/home/claude/.pipx` | pipx-installed apps and their venvs (`pipx install`) |
 | `~/.gitconfig` (bind, ro) | `/home/claude/.gitconfig` | Git identity from the host |
 | `<repo>/skills/` (bind, ro) | `/home/claude/.claude/skills/` | Custom Claude Code skills, version-controlled in this repo |
 | `<repo>/rules/` (bind, ro) | `/home/claude/.claude/rules/` | Global Claude Code rules, version-controlled in this repo |
@@ -90,11 +91,14 @@ Use `claude-sandbox restart <path-or-container>` to recreate a container with th
 
 ## Upgrading
 
-After pulling new commits that introduce additional named volumes, your existing `configurations.yml` does not pick them up automatically (the template only seeds the config file on first install). For `npm-globals` specifically, the new env vars (`NPM_CONFIG_PREFIX`, `PATH` entry) also live in the Docker image, so you need both an image rebuild and a config update.
+After pulling new commits that introduce additional named volumes, your existing `configurations.yml` does not pick them up automatically (the template only seeds the config file on first install). For `npm-globals` and `pipx` specifically, the new env vars (`NPM_CONFIG_PREFIX`, `PIPX_HOME`, `PIPX_BIN_DIR`, `PATH` entries) also live in the Docker image, so you need both an image rebuild and a config update.
+
+Note that `make install` only builds the image when one does not already exist — it does not rebuild on Dockerfile changes. Use `make build` (or `make build-no-cache`) to pick up image changes.
 
 ```bash
-make install                                                       # rebuild the image
+make build                                                         # rebuild the image
 claude-sandbox -g mounts add npm-globals:/home/claude/.npm-globals  # opt the global config into the new volume
+claude-sandbox -g mounts add pipx:/home/claude/.pipx                # cache pipx-installed apps
 ```
 
-The next time you open or restart a project, `claude-sandbox` will detect the config drift, show the new entry, and offer to recreate the container. Accept the restart and `npm install -g` results will persist from then on.
+The next time you open or restart a project, `claude-sandbox` will detect the config drift, show the new entry, and offer to recreate the container. Accept the restart and `npm install -g` / `pipx install` results will persist from then on.
