@@ -36,6 +36,7 @@ projects:
     #     - /host/path:/container/path
     #   environment:
     #     KEY: value
+    #   network: my-net   # join an existing Docker network (docker network create my-net)
     git_auth:
       type: ssh
       path: ${HOME}/.ssh/id_ed25519

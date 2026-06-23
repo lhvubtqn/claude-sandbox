@@ -4,7 +4,7 @@
 # stale completions (e.g. when $subcommands changes between versions).
 complete -c claude-sandbox -e
 
-set -l subcommands stop list open restart git-auth mounts ui
+set -l subcommands stop list open restart git-auth mounts ui network
 
 # No file completion at top level
 complete -c claude-sandbox -f
@@ -34,6 +34,9 @@ complete -c claude-sandbox \
 complete -c claude-sandbox \
     -n "not __fish_seen_subcommand_from $subcommands; and not __fish_seen_argument -s g -l global" \
     -a ui -d 'Show/set GUI display backend (none|wslg)'
+complete -c claude-sandbox \
+    -n "not __fish_seen_subcommand_from $subcommands; and not __fish_seen_argument -s g -l global" \
+    -a network -d 'Show/set Docker network for this project'
 
 # Leading selector flags (offered before a subcommand is chosen).
 # -p takes a required argument: an existing container (hash/path) or any directory.
@@ -140,4 +143,12 @@ complete -c claude-sandbox -f \
     -a wslg -d 'WSLg sockets + display env + auto lib install (WSL only)'
 complete -c claude-sandbox \
     -n "__fish_seen_subcommand_from ui" \
+    -l help -d 'Show usage'
+
+# network
+complete -c claude-sandbox -f \
+    -n "__fish_seen_subcommand_from network" \
+    -l clear -d 'Remove network override (use default bridge)'
+complete -c claude-sandbox \
+    -n "__fish_seen_subcommand_from network" \
     -l help -d 'Show usage'

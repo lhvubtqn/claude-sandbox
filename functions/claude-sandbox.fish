@@ -69,6 +69,34 @@ function _sandbox_config_write_ui_mode
     and mv $tmp $f
 end
 
+function _sandbox_config_read_network
+    # Usage: _sandbox_config_read_network <project_path>
+    # Project-level network overrides global; returns empty when unset.
+    set -l f (_sandbox_config_file)
+    test -f $f; or begin; echo ""; return; end
+    yq -r --arg p $argv[1] '.projects[$p].container.network // .global.container.network // empty' $f 2>/dev/null
+end
+
+function _sandbox_config_write_network
+    # Usage: _sandbox_config_write_network <project_path> <network_name>
+    set -l f (_sandbox_config_file)
+    test -f $f; or echo '{}' > $f
+    set -l tmp (mktemp)
+    yq -y --arg p $argv[1] --arg n $argv[2] \
+        '.projects[$p].container.network = $n' $f > $tmp
+    and mv $tmp $f
+end
+
+function _sandbox_config_clear_network
+    # Usage: _sandbox_config_clear_network <project_path>
+    set -l f (_sandbox_config_file)
+    test -f $f; or return
+    set -l tmp (mktemp)
+    yq -y --arg p $argv[1] \
+        'if .projects[$p].container then del(.projects[$p].container.network) else . end' $f > $tmp
+    and mv $tmp $f
+end
+
 function _sandbox_config_write_git_auth_ssh
     # Usage: _sandbox_config_write_git_auth_ssh <project_path> <key_path>
     set -l f (_sandbox_config_file)
@@ -270,6 +298,12 @@ function _sandbox_render_config
         printf 'ui_mode\t%s\n' $ui_mode
     end
 
+    # network: emit when set so joining/leaving a network triggers drift detection.
+    set -l network (_sandbox_config_read_network $p)
+    if test -n "$network"
+        printf 'network\t%s\n' $network
+    end
+
     # git auth: emit each line only when _sandbox_docker_run would apply the arg
     set -l auth_type (_sandbox_config_read_git_auth_type $p)
     printf 'git_auth_type\t%s\n' $auth_type
@@ -349,6 +383,12 @@ function _sandbox_docker_run
     for host in (yq -r --arg p $project_path \
         '((.global.container.extra_hosts // []) + (.projects[$p].container.extra_hosts // [])) | .[]' $f 2>/dev/null)
         set args $args --add-host $host
+    end
+
+    # network: project overrides global (only one network at run time)
+    set -l network (_sandbox_config_read_network $project_path)
+    if test -n "$network"
+        set args $args --network $network
     end
 
     # environment: global then project (docker-compose map or list form),
@@ -690,7 +730,7 @@ function claude-sandbox
     set -l target_path $PROJECT_PATH
     set -l global_mode 0
     set -l project_flag 0
-    set -l _subcmds stop list open restart git-auth mounts ui
+    set -l _subcmds stop list open restart git-auth mounts ui network
     while test (count $argv) -gt 0
         switch $argv[1]
             case -p --project
@@ -747,6 +787,7 @@ function claude-sandbox
         printf "  %-34s%s\n" "mounts <action>"       "Manage current project's volume entries"
         printf "  %-34s%s\n" "-g mounts <action>"    "Manage always-on global volume entries"
         printf "  %-34s%s\n" "ui [<mode>]"           "Show/set GUI display backend (none|wslg)"
+        printf "  %-34s%s\n" "network [<name>|--clear]" "Show/set Docker network for this project"
         echo ""
         echo "Global flags (before the subcommand):"
         printf "  %-34s%s\n" "-p, --project <id|path>" "Target another project (path, container hash, or name)"
@@ -1067,6 +1108,41 @@ function claude-sandbox
             return 1
         end
         _sandbox_attach $container_name $project_name
+        return
+    end
+
+    # --- network subcommand ---
+    if test (count $argv) -gt 0; and test $argv[1] = network
+        if contains -- --help $argv
+            echo "Usage: claude-sandbox [-p <project>] network [<name>|--clear]"
+            echo ""
+            echo "  Show or set the Docker network for a project."
+            echo ""
+            printf "  %-14s%s\n" "(no args)" "Print the current network"
+            printf "  %-14s%s\n" "<name>"    "Join the named Docker network on next start"
+            printf "  %-14s%s\n" "--clear"   "Remove network override (use default bridge)"
+            echo ""
+            echo "  The network must already exist: docker network create <name>"
+            echo "  Apply changes to an existing container with 'claude-sandbox restart'."
+            return 0
+        end
+        if test (count $argv) -lt 2
+            set -l net (_sandbox_config_read_network $target_path)
+            if test -n "$net"
+                echo "network: $net"
+            else
+                echo "network: (default bridge)"
+            end
+            return
+        end
+        if test "$argv[2]" = --clear
+            _sandbox_config_clear_network $target_path
+            echo "Cleared network for $target_path (will use default bridge)"
+        else
+            _sandbox_config_write_network $target_path $argv[2]
+            echo "Set network for $target_path: $argv[2]"
+            echo "Run 'claude-sandbox restart' to apply."
+        end
         return
     end
 
