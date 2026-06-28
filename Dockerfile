@@ -2,13 +2,20 @@ FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# System deps (from official Solana docs for Ubuntu/Debian)
+# System deps needed before the Solana installer runs (it needs curl to fetch
+# itself and sudo for its own apt installs). We install libclang1-18 here — the
+# libclang runtime shared library that bindgen dlopens (clang-sys locates it
+# without llvm-config or the dev headers). Installing it here marks it `manual`
+# so it survives the cleanup in the Solana layer below: that installer pulls in
+# the full llvm/libclang-dev dev stack (~840MB), which we purge afterward,
+# keeping only libclang1-18 + libllvm18 — verified bindgen and `anchor build`
+# both work with libclang1-18 alone.
+# Package docs/manpages are stripped in the same layer to keep the image lean.
 RUN apt-get update && apt-get install -y \
     build-essential \
     pkg-config \
     libudev-dev \
-    llvm \
-    libclang-dev \
+    libclang1-18 \
     protobuf-compiler \
     libssl-dev \
     curl \
@@ -18,7 +25,8 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     pipx \
     sudo \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/*
 
 # Create non-root user (claude --dangerously-skip-permissions requires non-root)
 # Ubuntu 24.04 ships with a user 'ubuntu' at UID 1000; rename it to 'claude'
@@ -35,8 +43,22 @@ ENV HOME=/home/claude
 RUN mkdir -p /home/claude/.vscode-server /home/claude/.ssh /home/claude/.npm-globals /home/claude/.pipx && \
     chmod 700 /home/claude/.ssh
 
-# Rust, Solana CLI, Anchor, Node.js, Yarn — official all-in-one install
-RUN curl --proto '=https' --tlsv1.2 -sSfL https://solana-install.solana.workers.dev | bash
+# Rust, Solana CLI, Anchor, Node.js, Yarn — official all-in-one install.
+# The installer runs its own `apt-get install ... llvm libclang-dev ...`, which
+# re-adds the full ~840MB LLVM dev stack. Purge it here in the SAME layer (the
+# install has already finished, so nothing downstream needs it), keeping only
+# libclang1-18 + libllvm18 for bindgen. Also strip the bundled Rust offline HTML
+# docs (~800MB) in this layer — a later RUN couldn't reclaim space already
+# committed to this one.
+RUN curl --proto '=https' --tlsv1.2 -sSfL https://solana-install.solana.workers.dev | bash \
+    && sudo apt-get purge -y \
+        llvm llvm-runtime llvm-18 llvm-18-dev llvm-18-tools llvm-18-runtime \
+        llvm-18-linker-tools libclang-dev libclang-18-dev libclang-common-18-dev \
+        libclang-cpp18 libclang-rt-18-dev \
+    && sudo apt-get autoremove --purge -y \
+    && sudo rm -rf /var/lib/apt/lists/* \
+    && rm -rf /home/claude/.rustup/toolchains/*/share/doc \
+              /home/claude/.rustup/toolchains/*/share/man
 
 # The Solana installer added raw nvm init to ~/.bashrc. Patch it to temporarily
 # unset NPM_CONFIG_PREFIX (which nvm.sh rejects) and restore it after loading.
