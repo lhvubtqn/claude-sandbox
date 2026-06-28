@@ -1,9 +1,7 @@
 # claude-sandbox — Design & Architecture
 
 > A companion to the user-facing [README](./README.md). The README tells you *how to use*
-> claude-sandbox; this document explains *how it is built and why*. It is synthesized from
-> the design specs and implementation plans under [`docs/superpowers/`](./docs/superpowers/),
-> which record the project's evolution one feature at a time.
+> claude-sandbox; this document explains *how it is built and why*.
 
 ---
 
@@ -239,8 +237,6 @@ The mode is WSL-only and participates in drift detection. (Full usage in the REA
 
 ## 7. Where to look next
 
-- **`docs/superpowers/specs/`** — the design rationale for each feature (the "why").
-- **`docs/superpowers/plans/`** — the step-by-step implementation plan for each (the "how").
 - **`functions/claude-sandbox.fish`** — the CLI itself; `_sandbox_render_config`,
   `_sandbox_resolve_target`, `_sandbox_launch`, and `_sandbox_recreate` are the load-bearing helpers.
 - **`Dockerfile` / `entrypoint.sh`** — image contents and per-start credential/UI wiring.
